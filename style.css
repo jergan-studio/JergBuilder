@@ -30,12 +30,12 @@ html, body {
     z-index: 10;
     color: white;
     opacity: 1;
-    /* Smooth fade and hide transitions */
-    transition: opacity 0.8s ease-in-out, visibility 0.8s ease-in-out;
+    /* FIX: Handles the smooth fading effect without snapping layout size */
+    transition: opacity 0.4s ease-in-out, visibility 0.4s ease-in-out;
     visibility: visible;
 }
 
-/* Triggered by JS when transitioning out */
+/* FIX: Forces full screen fade-out behavior and ignores click interaction blocks */
 .fade-out {
     opacity: 0 !important;
     visibility: hidden !important;
@@ -128,7 +128,7 @@ button:disabled {
     height: 100%;
     background-color: #4caf50;
     box-shadow: 0 0 8px #4caf50;
-    transition: width 0.1s linear;
+    transition: width 0.05s linear;
 }
 
 /* In-Game Heads Up Display Overlay layout */
