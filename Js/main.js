@@ -7,12 +7,12 @@ let gameRunning = false;
 const canvas = document.getElementById('gameCanvas');
 
 function init() {
-    // 1. Kick off the automated studio intro sequence
+    // 1. Kick off the optimized fast-loading splash sequence
     runSplashSequence();
 
     // 2. Core Three.js Engine Setup
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x87CEEB); // Classic Minecraft Sky Blue
+    scene.background = new THREE.Color(0x87CEEB); // Sky Blue
 
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     
@@ -37,50 +37,56 @@ function init() {
     // 6. Handle Screen Resizing Dynamically
     window.addEventListener('resize', onWindowResize);
     
-    // Begin underlying render loop ticker
+    // Begin rendering cycle
     animate();
 }
 
 function runSplashSequence() {
     const splash = document.getElementById('splashScreen');
     const mainMenu = document.getElementById('mainMenu');
+    const barFill = document.getElementById('loadingBarFill');
 
-    // Display "Jergan Studio" for 2 seconds
-    setTimeout(() => {
-        // Trigger the smooth opacity fade transition defined in CSS
-        splash.classList.add('fade-out');
-        
-        // Uncover the main menu behind it instantly during the fade
-        mainMenu.classList.remove('hidden');
-        
-        // Wait 800ms for the animation to end, then hide splash completely from screen tree
-        setTimeout(() => {
-            splash.classList.add('hidden');
-        }, 800);
+    let progress = 0;
+    // High-speed load configuration: Fills up fully in 600ms
+    const loadingDuration = 600; 
+    const intervalTime = 15; 
+    const step = (intervalTime / loadingDuration) * 100;
 
-    }, 2000);
+    const loadingInterval = setInterval(() => {
+        progress += step;
+        if (progress >= 100) {
+            progress = 100;
+            clearInterval(loadingInterval);
+
+            // Execute rapid clean transition
+            splash.classList.add('fade-out');
+            mainMenu.classList.remove('hidden');
+            
+            setTimeout(() => {
+                splash.classList.add('hidden');
+            }, 400); 
+        }
+        
+        barFill.style.width = progress + '%';
+    }, intervalTime);
 }
 
 function setupPointerLock() {
     const escMenu = document.getElementById('escMenu');
     const hud = document.getElementById('hud');
 
-    // Clicking into the active viewport automatically targets browser lock
     canvas.addEventListener('click', () => {
         if (gameRunning) {
             canvas.requestPointerLock();
         }
     });
 
-    // Handle when a player locks or escapes focus
     document.addEventListener('pointerlockchange', () => {
         if (document.pointerLockElement === canvas) {
-            // Mouse locked -> clear pause screens, show crosshairs/HUD, resume simulation
             escMenu.classList.add('hidden');
             hud.classList.remove('hidden');
             gameRunning = true;
         } else {
-            // Mouse unlocked (via ESC key) -> pause simulation, prompt control overlay
             if (gameRunning) {
                 escMenu.classList.remove('hidden');
                 hud.classList.add('hidden');
@@ -97,7 +103,7 @@ function setupMenuEvents() {
     const escMenu = document.getElementById('escMenu');
     const hud = document.getElementById('hud');
 
-    // Top Level Nav Buttons Interaction
+    // Main Menu Nav Nodes
     document.getElementById('btnWorlds').addEventListener('click', () => {
         mainMenu.classList.add('hidden');
         worldsMenu.classList.remove('hidden');
@@ -116,17 +122,67 @@ function setupMenuEvents() {
         });
     });
 
-    // World Selection Trigger Execution
+    // World Selection Trigger
     document.querySelectorAll('.world-select').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const chosenWorldType = e.target.getAttribute('data-world');
-            
-            // Build out voxel grid layout
             generateMap(scene, chosenWorldType);
             
-            // Hide selection screen overlays, enable tracking updates
             worldsMenu.classList.add('hidden');
             hud.classList.remove('hidden');
             
             gameRunning = true; 
-            canvas.request
+            canvas.requestPointerLock(); 
+        });
+    });
+
+    // Preset Skins Selector System
+    document.querySelectorAll('.skin-select').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            player.setSkin(e.target.getAttribute('data-skin'));
+            skinsMenu.classList.add('hidden');
+            mainMenu.classList.remove('hidden');
+        });
+    });
+
+    // --- NEW: Custom Skin Integration Option ---
+    // If you add a custom button or trigger, you can prompt the user for an image URL link!
+    const customSkinBtn = document.getElementById('btnCustomSkin');
+    if (customSkinBtn) {
+        customSkinBtn.addEventListener('click', () => {
+            const url = prompt("Enter custom skin image URL (PNG/JPG):", "https://i.imgur.com/yourImage.png");
+            if (url) {
+                player.setSkin('custom', url);
+                skinsMenu.classList.add('hidden');
+                mainMenu.classList.remove('hidden');
+            }
+        });
+    }
+
+    // Pause Menu Interaction Options
+    document.getElementById('btnResume').addEventListener('click', () => {
+        canvas.requestPointerLock();
+    });
+
+    document.getElementById('btnQuit').addEventListener('click', () => {
+        escMenu.classList.add('hidden');
+        mainMenu.classList.remove('hidden');
+        gameRunning = false;
+    });
+}
+
+function onWindowResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function animate() {
+    requestAnimationFrame(animate);
+    if (gameRunning) {
+        player.update();
+    }
+    renderer.render(scene, camera);
+}
+
+init();
