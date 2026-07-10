@@ -1,219 +1,149 @@
 import * as THREE from 'three';
-import { generateMap } from '../Map/mapGenerator.js';
-import { Player } from './player.js';
 
-let scene, camera, renderer, player;
-let gameRunning = false;
-const canvas = document.getElementById('gameCanvas');
+// Advanced Procedural PBR Shader Material
+export function createWorldShaderMaterial(baseColorHex, isMetallic = false) {
+    // Define material properties based on block type
+    const roughness = isMetallic ? 0.2 : 0.8;   // Smooth/shiny vs rough/matte
+    const metalness = isMetallic ? 0.9 : 0.05;  // Metallic reflection vs dielectric
 
-// Global engine clock to drive custom shader animations
-const clock = new THREE.Clock();
-
-function init() {
-    // 1. Start the fast-loading loading intro sequence
-    runSplashSequence();
-
-    // 2. Core Three.js Engine Setup
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x87CEEB); // Sky Blue
-
-    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    
-    renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-
-    // 3. Environment Illumination
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-    scene.add(ambientLight);
-
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    dirLight.position.set(10, 20, 10);
-    scene.add(dirLight);
-
-    // 4. Initialize Player Object Logic
-    player = new Player(scene, camera);
-
-    // 5. Setup Action Click and Input Event Systems
-    setupMenuEvents();
-    setupPointerLock();
-
-    // 6. Handle Screen Resizing Dynamically
-    window.addEventListener('resize', onWindowResize);
-    
-    // Begin continuous frame tick render loop
-    animate();
-}
-
-function runSplashSequence() {
-    const splash = document.getElementById('splashScreen');
-    const mainMenu = document.getElementById('mainMenu');
-    const barFill = document.getElementById('loadingBarFill');
-
-    let progress = 0;
-    const loadingDuration = 600; 
-    const intervalTime = 15; 
-    const step = (intervalTime / loadingDuration) * 100;
-    
-    let isSkipped = false;
-
-    function endSplash() {
-        if (isSkipped) return;
-        isSkipped = true;
+    return new THREE.ShaderMaterial({
+        uniforms: {
+            uTime: { value: 0 },
+            uBaseColor: { value: new THREE.Color(baseColorHex) },
+            uLightDirection: { value: new THREE.Vector3(12, 24, 8).normalize() },
+            uCameraPosition: { value: new THREE.Vector3(0, 0, 0) },
+            uRoughness: { value: roughness },
+            uMetalness: { value: metalness }
+        },
         
-        clearInterval(loadingInterval);
-        barFill.style.width = '100%';
-        
-        splash.classList.add('fade-out');
-        mainMenu.classList.remove('hidden');
-        
-        setTimeout(() => {
-            splash.classList.add('hidden');
-            splash.removeEventListener('click', handleSkipClick);
-        }, 400); 
-    }
+        vertexShader: `
+            uniform float uTime;
+            varying vec3 vNormal;
+            varying vec3 vPosition;
+            varying vec3 vWorldPos;
 
-    function handleSkipClick() {
-        endSplash();
-    }
-
-    splash.style.cursor = 'pointer'; 
-    splash.addEventListener('click', handleSkipClick);
-
-    const loadingInterval = setInterval(() => {
-        progress += step;
-        if (progress >= 100) {
-            endSplash();
-        } else if (!isSkipped) {
-            barFill.style.width = progress + '%';
-        }
-    }, intervalTime);
-}
-
-function setupPointerLock() {
-    const escMenu = document.getElementById('escMenu');
-    const hud = document.getElementById('hud');
-
-    canvas.addEventListener('click', () => {
-        if (gameRunning) {
-            canvas.requestPointerLock();
-        }
-    });
-
-    document.addEventListener('pointerlockchange', () => {
-        if (document.pointerLockElement === canvas) {
-            escMenu.classList.add('hidden');
-            hud.classList.remove('hidden');
-            gameRunning = true;
-        } else {
-            if (gameRunning) {
-                escMenu.classList.remove('hidden');
-                hud.classList.add('hidden');
-                gameRunning = false;
+            void main() {
+                // Pass surface normal and local coordinates
+                vNormal = normalize(normalMatrix * normal);
+                vPosition = position;
+                
+                // Track absolute world position for specular camera calculations
+                vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+                vWorldPos = worldPosition.xyz;
+                
+                gl_Position = projectionMatrix * viewMatrix * worldPosition;
             }
-        }
-    });
-}
+        `,
 
-function setupMenuEvents() {
-    const mainMenu = document.getElementById('mainMenu');
-    const worldsMenu = document.getElementById('worldsMenu');
-    const skinsMenu = document.getElementById('skinsMenu');
-    const escMenu = document.getElementById('escMenu');
-    const hud = document.getElementById('hud');
-
-    // Main Menu Nav Links
-    document.getElementById('btnWorlds').addEventListener('click', () => {
-        mainMenu.classList.add('hidden');
-        worldsMenu.classList.remove('hidden');
-    });
-
-    document.getElementById('btnSkins').addEventListener('click', () => {
-        mainMenu.classList.add('hidden');
-        skinsMenu.classList.remove('hidden');
-    });
-
-    document.querySelectorAll('.btnBack').forEach(btn => {
-        btn.addEventListener('click', () => {
-            worldsMenu.classList.add('hidden');
-            skinsMenu.classList.add('hidden');
-            mainMenu.classList.remove('hidden');
-        });
-    });
-
-    // World Selection Generation Handlers
-    document.querySelectorAll('.world-select').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const chosenWorldType = e.target.getAttribute('data-world');
+        fragmentShader: `
+            uniform vec3 uBaseColor;
+            uniform vec3 uLightDirection;
+            uniform vec3 uCameraPosition;
+            uniform float uRoughness;
+            uniform float uMetalness;
             
-            // Build the block map configurations
-            generateMap(scene, chosenWorldType);
-            
-            worldsMenu.classList.add('hidden');
-            hud.classList.remove('hidden');
-            
-            gameRunning = true; 
-            canvas.requestPointerLock(); 
-        });
-    });
+            varying vec3 vNormal;
+            varying vec3 vPosition;
+            varying vec3 vWorldPos;
 
-    // Asset Skins Selection Layout
-    document.querySelectorAll('.skin-select').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            player.setSkin(e.target.getAttribute('data-skin'));
-            skinsMenu.classList.add('hidden');
-            mainMenu.classList.remove('hidden');
-        });
-    });
+            #define PI 3.14159265359
 
-    // External Custom URL Image Skin Injector Hook
-    const customSkinBtn = document.getElementById('btnCustomSkin');
-    if (customSkinBtn) {
-        customSkinBtn.addEventListener('click', () => {
-            const url = prompt("Enter custom skin image URL (PNG/JPG):", "https://i.imgur.com/yourImage.png");
-            if (url) {
-                player.setSkin('custom', url);
-                skinsMenu.classList.add('hidden');
-                mainMenu.classList.remove('hidden');
+            // Cook-Torrance Microfacet PBR functions
+            float DistributionGGX(vec3 N, vec3 H, float roughness) {
+                float a = roughness * roughness;
+                float a2 = a * a;
+                float NdotH = max(dot(N, H), 0.0);
+                float NdotH2 = NdotH * NdotH;
+                float num = a2;
+                float denom = (NdotH2 * (a2 - 1.0) + 1.0);
+                denom = PI * denom * denom;
+                return num / max(denom, 0.0000001);
             }
-        });
-    }
 
-    // Escape Menu Resizers
-    document.getElementById('btnResume').addEventListener('click', () => {
-        canvas.requestPointerLock();
-    });
+            float GeometrySchlickGGX(float NdotV, float roughness) {
+                float r = (roughness + 1.0);
+                float k = (r * r) / 8.0;
+                float num = NdotV;
+                float denom = NdotV * (1.0 - k) + k;
+                return num / denom;
+            }
 
-    document.getElementById('btnQuit').addEventListener('click', () => {
-        escMenu.classList.add('hidden');
-        mainMenu.classList.remove('hidden');
-        gameRunning = false;
+            float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
+                float NdotV = max(dot(N, V), 0.0);
+                float NdotL = max(dot(N, L), 0.0);
+                float ggx2 = GeometrySchlickGGX(NdotV, roughness);
+                float ggx1 = GeometrySchlickGGX(NdotL, roughness);
+                return ggx1 * ggx2;
+            }
+
+            vec3 fresnelSchlick(float cosTheta, vec3 F0) {
+                return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+            }
+
+            void main() {
+                vec3 N = normalize(vNormal);
+                vec3 V = normalize(uCameraPosition - vWorldPos);
+                vec3 L = normalize(uLightDirection);
+                vec3 H = normalize(V + L);
+
+                // Base surface reflection rating (F0)
+                vec3 F0 = vec3(0.04); 
+                F0 = mix(F0, uBaseColor, uMetalness);
+
+                // Reflectance calculations
+                float NDF = DistributionGGX(N, H, uRoughness);   
+                float G   = GeometrySmith(N, V, L, uRoughness);      
+                vec3 F    = fresnelSchlick(max(dot(H, V), 0.0), F0);       
+                
+                vec3 kS = F;
+                vec3 kD = vec3(1.0) - kS;
+                kD *= 1.0 - uMetalness;     
+                
+                vec3 numerator    = NDF * G * F;
+                float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001;
+                vec3 specular = numerator / denominator;  
+                    
+                // Combine Diffuse and Specular light components
+                float NdotL = max(dot(N, L), 0.0);                
+                vec3 ambient = vec3(0.18) * uBaseColor;
+                vec3 color = ambient + (kD * uBaseColor / PI + specular) * vec3(1.2) * NdotL;
+
+                // Subtle stylized voxel border micro-shadow
+                float edgeSize = 0.465;
+                if (abs(vPosition.x) > edgeSize || abs(vPosition.y) > edgeSize || abs(vPosition.z) > edgeSize) {
+                    color *= 0.88;
+                }
+
+                // HDR tone mapping and gamma correction
+                color = color / (color + vec3(1.0));
+                color = pow(color, vec3(1.0 / 2.2));  
+
+                gl_FragColor = vec4(color, 1.0);
+            }
+        `
     });
 }
 
-function onWindowResize() {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-}
-
-function animate() {
-    requestAnimationFrame(animate);
-    
-    const elapsedTime = clock.getElapsedTime();
-
-    if (gameRunning) {
-        player.update();
-    }
-    
-    // Scan all scene meshes and update their custom shader material time hooks
+// Map Layout Generator Function
+export function generateMap(scene, type) {
+    const existingBlocks = [];
     scene.traverse((child) => {
-        if (child.isMesh && child.material && child.material.uniforms && child.material.uniforms.uTime) {
-            child.material.uniforms.uTime.value = elapsedTime;
+        if (child.isMesh && child !== scene.children[0] && !child.loaderObj) {
+            existingBlocks.push(child);
         }
     });
-    
-    renderer.render(scene, camera);
-}
+    existingBlocks.forEach(block => scene.remove(block));
 
-// Fire the program engine
-init();
+    // Material Color Hex Codes
+    const grassColor = 0x557a2b;
+    const dirtColor = 0x866043;
+    const stoneColor = 0x6e7075;   // Stone will look slightly more metallic/reflective
+
+    const blockGeometry = new THREE.BoxGeometry(1, 1, 1);
+    const mapSize = 16;
+
+    if (type === 'flat') {
+        for (let x = 0; x < mapSize; x++) {
+            for (let z = 0; z < mapSize; z++) {
+                // Stone Layer (Slightly metallic PBR properties)
+                const stoneBlock = new THREE.Mesh(blockGeometry, createWorldShader
