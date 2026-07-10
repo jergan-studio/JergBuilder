@@ -6,8 +6,11 @@ let scene, camera, renderer, player;
 let gameRunning = false;
 const canvas = document.getElementById('gameCanvas');
 
+// Global engine clock to drive custom shader animations
+const clock = new THREE.Clock();
+
 function init() {
-    // 1. Start the loading intro sequence
+    // 1. Start the fast-loading loading intro sequence
     runSplashSequence();
 
     // 2. Core Three.js Engine Setup
@@ -30,14 +33,14 @@ function init() {
     // 4. Initialize Player Object Logic
     player = new Player(scene, camera);
 
-    // 5. Setup Event Listeners
+    // 5. Setup Action Click and Input Event Systems
     setupMenuEvents();
     setupPointerLock();
 
     // 6. Handle Screen Resizing Dynamically
     window.addEventListener('resize', onWindowResize);
     
-    // Begin rendering cycle
+    // Begin continuous frame tick render loop
     animate();
 }
 
@@ -53,7 +56,6 @@ function runSplashSequence() {
     
     let isSkipped = false;
 
-    // Transition safely out of the splash screen
     function endSplash() {
         if (isSkipped) return;
         isSkipped = true;
@@ -70,12 +72,10 @@ function runSplashSequence() {
         }, 400); 
     }
 
-    // Skip handler function for the click event
     function handleSkipClick() {
         endSplash();
     }
 
-    // Interactive pointer cursor and click skip binding
     splash.style.cursor = 'pointer'; 
     splash.addEventListener('click', handleSkipClick);
 
@@ -121,7 +121,7 @@ function setupMenuEvents() {
     const escMenu = document.getElementById('escMenu');
     const hud = document.getElementById('hud');
 
-    // Main Menu Navigation Nodes
+    // Main Menu Nav Links
     document.getElementById('btnWorlds').addEventListener('click', () => {
         mainMenu.classList.add('hidden');
         worldsMenu.classList.remove('hidden');
@@ -140,10 +140,12 @@ function setupMenuEvents() {
         });
     });
 
-    // World Selection Trigger
+    // World Selection Generation Handlers
     document.querySelectorAll('.world-select').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const chosenWorldType = e.target.getAttribute('data-world');
+            
+            // Build the block map configurations
             generateMap(scene, chosenWorldType);
             
             worldsMenu.classList.add('hidden');
@@ -154,7 +156,7 @@ function setupMenuEvents() {
         });
     });
 
-    // Preset Skins Selector System
+    // Asset Skins Selection Layout
     document.querySelectorAll('.skin-select').forEach(btn => {
         btn.addEventListener('click', (e) => {
             player.setSkin(e.target.getAttribute('data-skin'));
@@ -163,7 +165,7 @@ function setupMenuEvents() {
         });
     });
 
-    // Custom Skin Integration Option
+    // External Custom URL Image Skin Injector Hook
     const customSkinBtn = document.getElementById('btnCustomSkin');
     if (customSkinBtn) {
         customSkinBtn.addEventListener('click', () => {
@@ -176,7 +178,7 @@ function setupMenuEvents() {
         });
     }
 
-    // Pause Menu Interaction Options
+    // Escape Menu Resizers
     document.getElementById('btnResume').addEventListener('click', () => {
         canvas.requestPointerLock();
     });
@@ -196,10 +198,22 @@ function onWindowResize() {
 
 function animate() {
     requestAnimationFrame(animate);
+    
+    const elapsedTime = clock.getElapsedTime();
+
     if (gameRunning) {
         player.update();
     }
+    
+    // Scan all scene meshes and update their custom shader material time hooks
+    scene.traverse((child) => {
+        if (child.isMesh && child.material && child.material.uniforms && child.material.uniforms.uTime) {
+            child.material.uniforms.uTime.value = elapsedTime;
+        }
+    });
+    
     renderer.render(scene, camera);
 }
 
+// Fire the program engine
 init();
