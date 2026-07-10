@@ -58,7 +58,13 @@
     </div>
 
     <div id="hud" class="hidden">
-        <div id="ui">Click window to look | WASD to Move | Press ESC to pause | Press ] to toggle View</div>
+        <div id="ui">
+            Click window to look | WASD to Move | Press ESC to pause | Press ] to toggle View
+            <br><br>
+            <label for="blockColor" style="vertical-align: middle;">Block Color: </label>
+            <input type="color" id="blockColor" value="#557a2b" style="vertical-align: middle; cursor: pointer;">
+            <span style="margin-left: 10px;">Left-Click to PLACE block</span>
+        </div>
     </div>
 
     <canvas id="gameCanvas"></canvas>
