@@ -29,13 +29,16 @@ html, body {
     z-index: 10;
     color: white;
     opacity: 1;
-    transition: opacity 1s ease-in-out;
+    /* FIX: This handles the smooth fading effect */
+    transition: opacity 0.8s ease-in-out, visibility 0.8s ease-in-out;
+    visibility: visible;
 }
 
-/* Fade animation for studio exit */
+/* FIX: When this class is added via JS, the screen fades and becomes unclickable */
 .fade-out {
-    opacity: 0;
-    pointer-events: none;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
 }
 
 .hidden {
@@ -112,4 +115,6 @@ button:disabled {
     border-radius: 5px;
     pointer-events: none;
     z-index: 5;
+    font-size: 1rem;
+    line-height: 1.5;
 }
