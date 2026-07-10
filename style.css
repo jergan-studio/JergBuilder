@@ -4,8 +4,9 @@ html, body {
     overflow: hidden;
     width: 100%;
     height: 100%;
-    background-color: #87CEEB; /* Sky blue */
-    font-family: sans-serif;
+    background-color: #0d0d11;
+    font-family: 'Courier New', Courier, monospace;
+    user-select: none;
 }
 
 #gameCanvas {
@@ -14,7 +15,94 @@ html, body {
     height: 100vh;
 }
 
-#ui {
+.overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: #141419;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 10;
+    color: white;
+    opacity: 1;
+    transition: opacity 1s ease-in-out;
+}
+
+/* Fade animation for studio exit */
+.fade-out {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.studio-logo {
+    font-size: 3.5rem;
+    letter-spacing: 4px;
+    color: #ffffff;
+    text-transform: uppercase;
+    animation: pulse 2s infinite alternate;
+}
+
+@keyframes pulse {
+    from { text-shadow: 0 0 10px #fff, 0 0 20px #4caf50; }
+    to { text-shadow: 0 0 20px #fff, 0 0 40px #4caf50; }
+}
+
+h1 {
+    font-size: 4rem;
+    margin-bottom: 2rem;
+    text-shadow: 3px 3px #000;
+    color: #4caf50;
+}
+
+h2 {
+    font-size: 2.5rem;
+    margin-bottom: 2rem;
+}
+
+.menu-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    width: 300px;
+}
+
+button {
+    padding: 15px;
+    font-size: 1.2rem;
+    font-weight: bold;
+    font-family: inherit;
+    background-color: #333;
+    color: white;
+    border: 3px solid #111;
+    cursor: pointer;
+    box-shadow: inset -4px -4px #111, inset 4px 4px #555;
+}
+
+button:hover:not(:disabled) {
+    background-color: #444;
+}
+
+button:active:not(:disabled) {
+    box-shadow: inset 4px 4px #111, inset -4px -4px #555;
+}
+
+button:disabled {
+    background-color: #222;
+    color: #555;
+    border-color: #111;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+#hud {
     position: absolute;
     top: 10px;
     left: 10px;
@@ -23,4 +111,5 @@ html, body {
     padding: 10px;
     border-radius: 5px;
     pointer-events: none;
+    z-index: 5;
 }
