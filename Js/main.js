@@ -4,18 +4,16 @@ import { Player } from './player.js';
 
 let scene, camera, renderer, player;
 let gameRunning = false;
+const canvas = document.getElementById('gameCanvas');
 
 function init() {
-    // 1. Initialize UI Flow (Splash Screen -> Main Menu)
     runSplashSequence();
 
-    // 2. Core engine foundations setup
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x87CEEB);
 
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     
-    const canvas = document.getElementById('gameCanvas');
     renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
 
@@ -29,43 +27,59 @@ function init() {
     player = new Player(scene, camera);
 
     setupMenuEvents();
+    setupPointerLock();
 
     window.addEventListener('resize', onWindowResize);
     
-    // Quick escape key back to menus via [
-    window.addEventListener('keydown', (e) => {
-        if (e.key === '[') {
-            gameRunning = false;
-            document.getElementById('mainMenu').classList.remove('hidden');
-            document.getElementById('hud').classList.add('hidden');
-        }
-    });
-
-    // Run underlying draw cycle, but positions won't advance until gameRunning becomes true
     animate();
 }
 
 function runSplashSequence() {
     const splash = document.getElementById('splashScreen');
     const mainMenu = document.getElementById('mainMenu');
-
-    // Display "Jergan Studio" for 2.5 seconds, then transition cleanly to Main Menu
     setTimeout(() => {
         splash.classList.add('fade-out');
-        
-        // Fully remove splash asset visibility properties after CSS transition finishes
         setTimeout(() => {
             splash.classList.add('hidden');
             mainMenu.classList.remove('hidden');
         }, 1000);
-
     }, 2500);
+}
+
+function setupPointerLock() {
+    const escMenu = document.getElementById('escMenu');
+    const hud = document.getElementById('hud');
+
+    // Click canvas to trigger pointer lock mechanism
+    canvas.addEventListener('click', () => {
+        if (gameRunning) {
+            canvas.requestPointerLock();
+        }
+    });
+
+    // Capture browser events when user activates or breaks out of lock focus state
+    document.addEventListener('pointerlockchange', () => {
+        if (document.pointerLockElement === canvas) {
+            // Mouse locked successfully -> continue gameplay loop
+            escMenu.classList.add('hidden');
+            hud.classList.remove('hidden');
+            gameRunning = true;
+        } else {
+            // Mouse unlocked (e.g., via ESC key press) -> Open menu pause options
+            if (gameRunning) {
+                escMenu.classList.remove('hidden');
+                hud.classList.add('hidden');
+                gameRunning = false;
+            }
+        }
+    });
 }
 
 function setupMenuEvents() {
     const mainMenu = document.getElementById('mainMenu');
     const worldsMenu = document.getElementById('worldsMenu');
     const skinsMenu = document.getElementById('skinsMenu');
+    const escMenu = document.getElementById('escMenu');
     const hud = document.getElementById('hud');
 
     document.getElementById('btnWorlds').addEventListener('click', () => {
@@ -86,30 +100,36 @@ function setupMenuEvents() {
         });
     });
 
-    // Clicking a world loads the map and starts the gameplay
     document.querySelectorAll('.world-select').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const chosenWorldType = e.target.getAttribute('data-world');
-            
-            // Build the architecture layer
             generateMap(scene, chosenWorldType);
             
-            // Close down selection menu layers, enable player viewport active state
             worldsMenu.classList.add('hidden');
             hud.classList.remove('hidden');
             
             gameRunning = true; 
+            canvas.requestPointerLock(); // Auto-engage mouse lock on world start
         });
     });
 
     document.querySelectorAll('.skin-select').forEach(btn => {
         btn.addEventListener('click', (e) => {
-            const chosenSkin = e.target.getAttribute('data-skin');
-            player.setSkin(chosenSkin);
-            
+            player.setSkin(e.target.getAttribute('data-skin'));
             skinsMenu.classList.add('hidden');
             mainMenu.classList.remove('hidden');
         });
+    });
+
+    // ESC Menu Options Actions
+    document.getElementById('btnResume').addEventListener('click', () => {
+        canvas.requestPointerLock();
+    });
+
+    document.getElementById('btnQuit').addEventListener('click', () => {
+        escMenu.classList.add('hidden');
+        mainMenu.classList.remove('hidden');
+        gameRunning = false;
     });
 }
 
@@ -121,11 +141,9 @@ function onWindowResize() {
 
 function animate() {
     requestAnimationFrame(animate);
-    
     if (gameRunning) {
         player.update();
     }
-    
     renderer.render(scene, camera);
 }
 
