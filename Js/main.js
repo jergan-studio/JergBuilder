@@ -30,8 +30,12 @@ function init() {
     dirLight.position.set(12, 24, 8);
     scene.add(dirLight);
 
-    // 4. Initialize Player Object Logic
-    player = new Player(scene, camera);
+    // 4. Initialize Player Object Logic Safely
+    try {
+        player = new Player(scene, camera);
+    } catch (e) {
+        console.error("Failed to initialize Player module. Check player.js exports:", e);
+    }
 
     // 5. Setup Action Click and Input Event Systems
     setupMenuEvents();
@@ -48,6 +52,12 @@ function runSplashSequence() {
     const splash = document.getElementById('splashScreen');
     const mainMenu = document.getElementById('mainMenu');
     const barFill = document.getElementById('loadingBarFill');
+
+    if (!splash || !mainMenu || !barFill) {
+        console.warn("Loading elements missing from HTML. Skipping splash animation entirely.");
+        if (mainMenu) mainMenu.classList.remove('hidden');
+        return;
+    }
 
     let progress = 0;
     const loadingDuration = 600; 
@@ -96,6 +106,8 @@ function setupPointerLock() {
     const escMenu = document.getElementById('escMenu');
     const hud = document.getElementById('hud');
 
+    if (!canvas) return;
+
     canvas.addEventListener('click', () => {
         if (gameRunning) {
             canvas.requestPointerLock();
@@ -104,13 +116,13 @@ function setupPointerLock() {
 
     document.addEventListener('pointerlockchange', () => {
         if (document.pointerLockElement === canvas) {
-            escMenu.classList.add('hidden');
-            hud.classList.remove('hidden');
+            if (escMenu) escMenu.classList.add('hidden');
+            if (hud) hud.classList.remove('hidden');
             gameRunning = true;
         } else {
             if (gameRunning) {
-                escMenu.classList.remove('hidden');
-                hud.classList.add('hidden');
+                if (escMenu) escMenu.classList.remove('hidden');
+                if (hud) hud.classList.add('hidden');
                 gameRunning = false;
             }
         }
@@ -124,74 +136,89 @@ function setupMenuEvents() {
     const escMenu = document.getElementById('escMenu');
     const hud = document.getElementById('hud');
 
+    // Safe helper function for adding event listeners securely
+    const bindClick = (id, callback) => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('click', callback);
+    };
+
     // Main Menu Navigation
-    document.getElementById('btnWorlds').addEventListener('click', () => {
-        mainMenu.classList.add('hidden');
-        worldsMenu.classList.remove('hidden');
+    bindClick('btnWorlds', () => {
+        if (mainMenu && worldsMenu) {
+            mainMenu.classList.add('hidden');
+            worldsMenu.classList.remove('hidden');
+        }
     });
 
-    document.getElementById('btnSkins').addEventListener('click', () => {
-        mainMenu.classList.add('hidden');
-        skinsMenu.classList.remove('hidden');
+    bindClick('btnSkins', () => {
+        if (mainMenu && skinsMenu) {
+            mainMenu.classList.add('hidden');
+            skinsMenu.classList.remove('hidden');
+        }
     });
 
     document.querySelectorAll('.btnBack').forEach(btn => {
         btn.addEventListener('click', () => {
-            worldsMenu.classList.add('hidden');
-            skinsMenu.classList.add('hidden');
-            mainMenu.classList.remove('hidden');
+            if (worldsMenu) worldsMenu.classList.add('hidden');
+            if (skinsMenu) skinsMenu.classList.add('hidden');
+            if (mainMenu) mainMenu.classList.remove('hidden');
         });
     });
 
-    // World Selection
+    // World Selection Generation Interface
     document.querySelectorAll('.world-select').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const chosenWorldType = e.target.getAttribute('data-world');
-            generateMap(scene, chosenWorldType);
             
-            worldsMenu.classList.add('hidden');
-            hud.classList.remove('hidden');
+            try {
+                generateMap(scene, chosenWorldType);
+            } catch (err) {
+                console.error("Map Generation script error:", err);
+            }
+            
+            if (worldsMenu) worldsMenu.classList.add('hidden');
+            if (hud) hud.classList.remove('hidden');
             
             gameRunning = true; 
-            canvas.requestPointerLock(); 
+            if (canvas) canvas.requestPointerLock(); 
         });
     });
 
     // Preset Skins Selector System
     document.querySelectorAll('.skin-select').forEach(btn => {
         btn.addEventListener('click', (e) => {
-            player.setSkin(e.target.getAttribute('data-skin'));
-            skinsMenu.classList.add('hidden');
-            mainMenu.classList.remove('hidden');
+            if (player && typeof player.setSkin === 'function') {
+                player.setSkin(e.target.getAttribute('data-skin'));
+            }
+            if (skinsMenu) skinsMenu.classList.add('hidden');
+            if (mainMenu) mainMenu.classList.remove('hidden');
         });
     });
 
     // External Custom URL Image Skin Injector
-    const customSkinBtn = document.getElementById('btnCustomSkin');
-    if (customSkinBtn) {
-        customSkinBtn.addEventListener('click', () => {
-            const url = prompt("Enter custom skin image URL (PNG/JPG):", "https://i.imgur.com/yourImage.png");
-            if (url) {
-                player.setSkin('custom', url);
-                skinsMenu.classList.add('hidden');
-                mainMenu.classList.remove('hidden');
-            }
-        });
-    }
-
-    // Pause Menu Options
-    document.getElementById('btnResume').addEventListener('click', () => {
-        canvas.requestPointerLock();
+    bindClick('btnCustomSkin', () => {
+        const url = prompt("Enter custom skin image URL (PNG/JPG):", "https://i.imgur.com/yourImage.png");
+        if (url && player && typeof player.setSkin === 'function') {
+            player.setSkin('custom', url);
+            if (skinsMenu) skinsMenu.classList.add('hidden');
+            if (mainMenu) mainMenu.classList.remove('hidden');
+        }
     });
 
-    document.getElementById('btnQuit').addEventListener('click', () => {
-        escMenu.classList.add('hidden');
-        mainMenu.classList.remove('hidden');
+    // Pause Menu Options
+    bindClick('btnResume', () => {
+        if (canvas) canvas.requestPointerLock();
+    });
+
+    bindClick('btnQuit', () => {
+        if (escMenu) escMenu.classList.add('hidden');
+        if (mainMenu) mainMenu.classList.remove('hidden');
         gameRunning = false;
     });
 }
 
 function onWindowResize() {
+    if (!camera || !renderer) return;
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -202,25 +229,30 @@ function animate() {
     
     const elapsedTime = clock.getElapsedTime();
 
-    if (gameRunning) {
+    if (gameRunning && player && typeof player.update === 'function') {
         player.update();
     }
     
     // Scan all active meshes to sync PBR variables dynamically
-    scene.traverse((child) => {
-        if (child.isMesh && child.material && child.material.uniforms) {
-            // Update elapsed simulation time uniform
-            if (child.material.uniforms.uTime) {
-                child.material.uniforms.uTime.value = elapsedTime;
+    if (scene) {
+        scene.traverse((child) => {
+            if (child.isMesh && child.material && child.material.uniforms) {
+                // Update elapsed simulation time uniform
+                if (child.material.uniforms.uTime) {
+                    child.material.uniforms.uTime.value = elapsedTime;
+                }
+                // Update real-time camera position vector for specularity physics
+                if (child.material.uniforms.uCameraPosition && camera) {
+                    child.material.uniforms.uCameraPosition.value.copy(camera.position);
+                }
             }
-            // Update real-time camera position vector for specularity physics
-            if (child.material.uniforms.uCameraPosition) {
-                child.material.uniforms.uCameraPosition.value.copy(camera.position);
-            }
-        }
-    });
+        });
+    }
     
-    renderer.render(scene, camera);
+    if (renderer && scene && camera) {
+        renderer.render(scene, camera);
+    }
 }
 
+// Fire the program engine
 init();
