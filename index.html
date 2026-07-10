@@ -7,7 +7,38 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div id="ui">WASD to Move | Mouse/Arrows to Look</div>
+    <div id="mainMenu" class="overlay">
+        <h1>JergBuilder</h1>
+        <div class="menu-buttons">
+            <button id="btnWorlds">Worlds</button>
+            <button id="btnSkins">Skins</button>
+            <button id="btnMultiplayer" disabled>Multiplayer (Soon)</button>
+        </div>
+    </div>
+
+    <div id="worldsMenu" class="overlay hidden">
+        <h2>Select World</h2>
+        <div class="menu-buttons">
+            <button class="world-select" data-world="flat">Flat World</button>
+            <button class="world-select" data-world="hills">Hilly World</button>
+            <button class="btnBack">Back to Menu</button>
+        </div>
+    </div>
+
+    <div id="skinsMenu" class="overlay hidden">
+        <h2>Select Skin</h2>
+        <div class="menu-buttons">
+            <button class="skin-select" data-skin="default">Default Model</button>
+            <button class="skin-select" data-skin="red">Red Team Skin</button>
+            <button class="skin-select" data-skin="blue">Blue Team Skin</button>
+            <button class="btnBack">Back to Menu</button>
+        </div>
+    </div>
+
+    <div id="hud" class="hidden">
+        <div id="ui">WASD to Move | Press [ to pause | Press ] to toggle View</div>
+    </div>
+
     <canvas id="gameCanvas"></canvas>
 
     <script type="importmap">
