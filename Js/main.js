@@ -7,16 +7,19 @@ let gameRunning = false;
 const canvas = document.getElementById('gameCanvas');
 
 function init() {
+    // 1. Kick off the automated studio intro sequence
     runSplashSequence();
 
+    // 2. Core Three.js Engine Setup
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x87CEEB);
+    scene.background = new THREE.Color(0x87CEEB); // Classic Minecraft Sky Blue
 
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     
     renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
 
+    // 3. Environment Illumination
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambientLight);
 
@@ -24,48 +27,60 @@ function init() {
     dirLight.position.set(10, 20, 10);
     scene.add(dirLight);
 
+    // 4. Initialize Player Object Logic
     player = new Player(scene, camera);
 
+    // 5. Setup Action Click Listeners
     setupMenuEvents();
     setupPointerLock();
 
+    // 6. Handle Screen Resizing Dynamically
     window.addEventListener('resize', onWindowResize);
     
+    // Begin underlying render loop ticker
     animate();
 }
 
 function runSplashSequence() {
     const splash = document.getElementById('splashScreen');
     const mainMenu = document.getElementById('mainMenu');
+
+    // Display "Jergan Studio" for 2 seconds
     setTimeout(() => {
+        // Trigger the smooth opacity fade transition defined in CSS
         splash.classList.add('fade-out');
+        
+        // Uncover the main menu behind it instantly during the fade
+        mainMenu.classList.remove('hidden');
+        
+        // Wait 800ms for the animation to end, then hide splash completely from screen tree
         setTimeout(() => {
             splash.classList.add('hidden');
-            mainMenu.classList.remove('hidden');
-        }, 1000);
-    }, 2500);
+        }, 800);
+
+    }, 2000);
 }
 
 function setupPointerLock() {
     const escMenu = document.getElementById('escMenu');
     const hud = document.getElementById('hud');
 
-    // Click canvas to trigger pointer lock mechanism
+    // Clicking into the active viewport automatically targets browser lock
     canvas.addEventListener('click', () => {
         if (gameRunning) {
             canvas.requestPointerLock();
         }
     });
 
-    // Capture browser events when user activates or breaks out of lock focus state
+    // Handle when a player locks or escapes focus
     document.addEventListener('pointerlockchange', () => {
         if (document.pointerLockElement === canvas) {
-            // Mouse locked successfully -> continue gameplay loop
+            // Mouse locked -> clear pause screens, show crosshairs/HUD, resume simulation
             escMenu.classList.add('hidden');
             hud.classList.remove('hidden');
             gameRunning = true;
         } else {
-            // Mouse unlocked (e.g., via ESC key press) -> Open menu pause options
+            // Mouse unlocked (via ESC key) -> pause simulation, prompt control overlay
             if (gameRunning) {
                 escMenu.classList.remove('hidden');
                 hud.classList.add('hidden');
@@ -82,6 +97,7 @@ function setupMenuEvents() {
     const escMenu = document.getElementById('escMenu');
     const hud = document.getElementById('hud');
 
+    // Top Level Nav Buttons Interaction
     document.getElementById('btnWorlds').addEventListener('click', () => {
         mainMenu.classList.add('hidden');
         worldsMenu.classList.remove('hidden');
@@ -100,51 +116,17 @@ function setupMenuEvents() {
         });
     });
 
+    // World Selection Trigger Execution
     document.querySelectorAll('.world-select').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const chosenWorldType = e.target.getAttribute('data-world');
+            
+            // Build out voxel grid layout
             generateMap(scene, chosenWorldType);
             
+            // Hide selection screen overlays, enable tracking updates
             worldsMenu.classList.add('hidden');
             hud.classList.remove('hidden');
             
             gameRunning = true; 
-            canvas.requestPointerLock(); // Auto-engage mouse lock on world start
-        });
-    });
-
-    document.querySelectorAll('.skin-select').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            player.setSkin(e.target.getAttribute('data-skin'));
-            skinsMenu.classList.add('hidden');
-            mainMenu.classList.remove('hidden');
-        });
-    });
-
-    // ESC Menu Options Actions
-    document.getElementById('btnResume').addEventListener('click', () => {
-        canvas.requestPointerLock();
-    });
-
-    document.getElementById('btnQuit').addEventListener('click', () => {
-        escMenu.classList.add('hidden');
-        mainMenu.classList.remove('hidden');
-        gameRunning = false;
-    });
-}
-
-function onWindowResize() {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-}
-
-function animate() {
-    requestAnimationFrame(animate);
-    if (gameRunning) {
-        player.update();
-    }
-    renderer.render(scene, camera);
-}
-
-init();
+            canvas.request
