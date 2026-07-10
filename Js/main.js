@@ -7,7 +7,7 @@ let gameRunning = false;
 const canvas = document.getElementById('gameCanvas');
 
 function init() {
-    // 1. Kick off the optimized fast-loading splash sequence
+    // 1. Kick off the loading intro sequence
     runSplashSequence();
 
     // 2. Core Three.js Engine Setup
@@ -47,27 +47,46 @@ function runSplashSequence() {
     const barFill = document.getElementById('loadingBarFill');
 
     let progress = 0;
-    // High-speed load configuration: Fills up fully in 600ms
     const loadingDuration = 600; 
     const intervalTime = 15; 
     const step = (intervalTime / loadingDuration) * 100;
+    
+    let isSkipped = false;
+
+    // Helper function to transition safely out of the splash screen
+    function endSplash() {
+        if (isSkipped) return;
+        isSkipped = true;
+        
+        clearInterval(loadingInterval);
+        barFill.style.width = '100%';
+        
+        splash.classList.add('fade-out');
+        mainMenu.classList.remove('hidden');
+        
+        setTimeout(() => {
+            splash.classList.add('hidden');
+            // Remove the skip click listener to clean up memory
+            splash.removeEventListener('click', handleSkipClick);
+        }, 400); 
+    }
+
+    // Skip handler function for the click event
+    function handleSkipClick() {
+        endSplash();
+    }
+
+    // --- NEW: Add a click listener to the splash screen overlay to allow skipping ---
+    splash.style.cursor = 'pointer'; // Visual hint that it can be clicked
+    splash.addEventListener('click', handleSkipClick);
 
     const loadingInterval = setInterval(() => {
         progress += step;
         if (progress >= 100) {
-            progress = 100;
-            clearInterval(loadingInterval);
-
-            // Execute rapid clean transition
-            splash.classList.add('fade-out');
-            mainMenu.classList.remove('hidden');
-            
-            setTimeout(() => {
-                splash.classList.add('hidden');
-            }, 400); 
+            endSplash();
+        } else if (!isSkipped) {
+            barFill.style.width = progress + '%';
         }
-        
-        barFill.style.width = progress + '%';
     }, intervalTime);
 }
 
@@ -129,60 +148,3 @@ function setupMenuEvents() {
             generateMap(scene, chosenWorldType);
             
             worldsMenu.classList.add('hidden');
-            hud.classList.remove('hidden');
-            
-            gameRunning = true; 
-            canvas.requestPointerLock(); 
-        });
-    });
-
-    // Preset Skins Selector System
-    document.querySelectorAll('.skin-select').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            player.setSkin(e.target.getAttribute('data-skin'));
-            skinsMenu.classList.add('hidden');
-            mainMenu.classList.remove('hidden');
-        });
-    });
-
-    // --- NEW: Custom Skin Integration Option ---
-    // If you add a custom button or trigger, you can prompt the user for an image URL link!
-    const customSkinBtn = document.getElementById('btnCustomSkin');
-    if (customSkinBtn) {
-        customSkinBtn.addEventListener('click', () => {
-            const url = prompt("Enter custom skin image URL (PNG/JPG):", "https://i.imgur.com/yourImage.png");
-            if (url) {
-                player.setSkin('custom', url);
-                skinsMenu.classList.add('hidden');
-                mainMenu.classList.remove('hidden');
-            }
-        });
-    }
-
-    // Pause Menu Interaction Options
-    document.getElementById('btnResume').addEventListener('click', () => {
-        canvas.requestPointerLock();
-    });
-
-    document.getElementById('btnQuit').addEventListener('click', () => {
-        escMenu.classList.add('hidden');
-        mainMenu.classList.remove('hidden');
-        gameRunning = false;
-    });
-}
-
-function onWindowResize() {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-}
-
-function animate() {
-    requestAnimationFrame(animate);
-    if (gameRunning) {
-        player.update();
-    }
-    renderer.render(scene, camera);
-}
-
-init();
