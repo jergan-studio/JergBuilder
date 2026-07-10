@@ -5,9 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>JergBuilder</title>
     <link rel="stylesheet" href="style.css">
+    
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
 </head>
 <body>
-    <div id="splashScreen" class="overlay animate-fade">
+
+    <div id="splashScreen" class="overlay">
         <h2 class="studio-logo">Jergan Studio</h2>
     </div>
 
@@ -39,20 +49,20 @@
         </div>
     </div>
 
+    <div id="escMenu" class="overlay hidden">
+        <h2>Game Paused</h2>
+        <div class="menu-buttons">
+            <button id="btnResume">Resume Game</button>
+            <button id="btnQuit">Quit to Main Menu</button>
+        </div>
+    </div>
+
     <div id="hud" class="hidden">
-        <div id="ui">WASD to Move | Press [ to pause | Press ] to toggle View</div>
+        <div id="ui">Click window to look | WASD to Move | Press ESC to pause | Press ] to toggle View</div>
     </div>
 
     <canvas id="gameCanvas"></canvas>
 
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-            }
-        }
-    </script>
-    <script type="module" src="./Js/main.js"></script>
+    <script type="module" defer src="./Js/main.js"></script>
 </body>
 </html>
