@@ -10,10 +10,7 @@ const canvas = document.getElementById('gameCanvas');
 const clock = new THREE.Clock();
 
 function init() {
-    // 1. Start the fast-loading loading intro sequence
-    runSplashSequence();
-
-    // 2. Core Three.js Engine Setup
+    // 1. Core Three.js Engine Setup
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x87CEEB); // Sky Blue
 
@@ -22,7 +19,7 @@ function init() {
     renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
 
-    // 3. Environment Illumination
+    // 2. Environment Illumination
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambientLight);
 
@@ -30,20 +27,23 @@ function init() {
     dirLight.position.set(12, 24, 8);
     scene.add(dirLight);
 
-    // 4. Initialize Player Object Logic Safely
+    // 3. Initialize Player Object Logic Safely
     try {
         player = new Player(scene, camera);
     } catch (e) {
         console.error("Failed to initialize Player module. Check player.js exports:", e);
     }
 
-    // 5. Setup Action Click and Input Event Systems
+    // 4. Setup Action Click and Input Event Systems
     setupMenuEvents();
     setupPointerLock();
 
-    // 6. Handle Screen Resizing Dynamically
+    // 5. Handle Screen Resizing Dynamically
     window.addEventListener('resize', onWindowResize);
     
+    // 6. Engine initialization complete -> Run the ultra-fast splash exit sequence
+    runSplashSequence();
+
     // Begin continuous frame tick render loop
     animate();
 }
@@ -54,52 +54,35 @@ function runSplashSequence() {
     const barFill = document.getElementById('loadingBarFill');
 
     if (!splash || !mainMenu || !barFill) {
-        console.warn("Loading elements missing from HTML. Skipping splash animation entirely.");
         if (mainMenu) mainMenu.classList.remove('hidden');
         return;
     }
 
-    let progress = 0;
-    const loadingDuration = 600; 
-    const intervalTime = 15; 
-    const step = (intervalTime / loadingDuration) * 100;
-    
-    let isSkipped = false;
+    let isFinished = false;
 
-    // Transition safely out of the splash screen
-    function endSplash() {
-        if (isSkipped) return;
-        isSkipped = true;
+    // Direct transition routine out of the splash overlay
+    function removeSplash() {
+        if (isFinished) return;
+        isFinished = true;
         
-        clearInterval(loadingInterval);
         barFill.style.width = '100%';
-        
         splash.classList.add('fade-out');
         mainMenu.classList.remove('hidden');
         
         setTimeout(() => {
             splash.classList.add('hidden');
-            splash.removeEventListener('click', handleSkipClick);
-        }, 400); 
+            splash.removeEventListener('click', removeSplash);
+        }, 300); // Fast 300ms fade cleanup
     }
 
-    // Skip handler function for the click event
-    function handleSkipClick() {
-        endSplash();
-    }
+    // Allow user to click to force-skip instantly at any frame
+    splash.style.cursor = 'pointer';
+    splash.addEventListener('click', removeSplash);
 
-    // Interactive pointer cursor and click skip binding
-    splash.style.cursor = 'pointer'; 
-    splash.addEventListener('click', handleSkipClick);
-
-    const loadingInterval = setInterval(() => {
-        progress += step;
-        if (progress >= 100) {
-            endSplash();
-        } else if (!isSkipped) {
-            barFill.style.width = progress + '%';
-        }
-    }, intervalTime);
+    // INSTEAD OF A SLOW INTERVAL TIMER: 
+    // Snap the bar forward instantly and clear the splash screen immediately on resource ready
+    barFill.style.width = '100%';
+    setTimeout(removeSplash, 100); 
 }
 
 function setupPointerLock() {
@@ -136,7 +119,6 @@ function setupMenuEvents() {
     const escMenu = document.getElementById('escMenu');
     const hud = document.getElementById('hud');
 
-    // Safe helper function for adding event listeners securely
     const bindClick = (id, callback) => {
         const el = document.getElementById(id);
         if (el) el.addEventListener('click', callback);
@@ -229,30 +211,4 @@ function animate() {
     
     const elapsedTime = clock.getElapsedTime();
 
-    if (gameRunning && player && typeof player.update === 'function') {
-        player.update();
-    }
-    
-    // Scan all active meshes to sync PBR variables dynamically
-    if (scene) {
-        scene.traverse((child) => {
-            if (child.isMesh && child.material && child.material.uniforms) {
-                // Update elapsed simulation time uniform
-                if (child.material.uniforms.uTime) {
-                    child.material.uniforms.uTime.value = elapsedTime;
-                }
-                // Update real-time camera position vector for specularity physics
-                if (child.material.uniforms.uCameraPosition && camera) {
-                    child.material.uniforms.uCameraPosition.value.copy(camera.position);
-                }
-            }
-        });
-    }
-    
-    if (renderer && scene && camera) {
-        renderer.render(scene, camera);
-    }
-}
-
-// Fire the program engine
-init();
+    if
