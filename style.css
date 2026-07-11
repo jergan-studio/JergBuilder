@@ -30,12 +30,12 @@ html, body {
     z-index: 10;
     color: white;
     opacity: 1;
-    /* FIX: Handles the smooth fading effect without snapping layout size */
-    transition: opacity 0.4s ease-in-out, visibility 0.4s ease-in-out;
+    /* Smooth 5-second cinematic fade duration */
+    transition: opacity 5s ease-in-out, visibility 5s ease-in-out;
     visibility: visible;
 }
 
-/* FIX: Forces full screen fade-out behavior and ignores click interaction blocks */
+/* Forces full screen fade-out behavior and ignores click interaction blocks */
 .fade-out {
     opacity: 0 !important;
     visibility: hidden !important;
