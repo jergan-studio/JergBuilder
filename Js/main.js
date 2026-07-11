@@ -41,7 +41,7 @@ function init() {
     // 5. Handle Screen Resizing Dynamically
     window.addEventListener('resize', onWindowResize);
     
-    // 6. Engine initialization complete -> Run the ultra-fast splash exit sequence
+    // 6. Engine initialization complete -> Run the splash exit sequence
     runSplashSequence();
 
     // Begin continuous frame tick render loop
@@ -69,18 +69,18 @@ function runSplashSequence() {
         splash.classList.add('fade-out');
         mainMenu.classList.remove('hidden');
         
+        // Wait exactly 5 seconds for the CSS opacity transition to complete
         setTimeout(() => {
             splash.classList.add('hidden');
             splash.removeEventListener('click', removeSplash);
-        }, 300); // Fast 300ms fade cleanup
+        }, 5000); 
     }
 
-    // Allow user to click to force-skip instantly at any frame
+    // Allow user to click to force-skip instantly if desired
     splash.style.cursor = 'pointer';
     splash.addEventListener('click', removeSplash);
 
-    // INSTEAD OF A SLOW INTERVAL TIMER: 
-    // Snap the bar forward instantly and clear the splash screen immediately on resource ready
+    // Snap the bar forward instantly and start the 5-second fade on resource ready
     barFill.style.width = '100%';
     setTimeout(removeSplash, 100); 
 }
@@ -211,4 +211,27 @@ function animate() {
     
     const elapsedTime = clock.getElapsedTime();
 
-    if
+    if (gameRunning && player && typeof player.update === 'function') {
+        player.update();
+    }
+    
+    // Scan all active meshes to sync PBR variables dynamically
+    if (scene) {
+        scene.traverse((child) => {
+            if (child.isMesh && child.material && child.material.uniforms) {
+                if (child.material.uniforms.uTime) {
+                    child.material.uniforms.uTime.value = elapsedTime;
+                }
+                if (child.material.uniforms.uCameraPosition && camera) {
+                    child.material.uniforms.uCameraPosition.value.copy(camera.position);
+                }
+            }
+        });
+    }
+    
+    if (renderer && scene && camera) {
+        renderer.render(scene, camera);
+    }
+}
+
+init();
