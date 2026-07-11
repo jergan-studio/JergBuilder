@@ -13,6 +13,10 @@ html, body {
     display: block;
     width: 100vw;
     height: 100vh;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
 }
 
 /* Master Overlay for Menu screens */
@@ -27,37 +31,18 @@ html, body {
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    z-index: 10;
+    z-index: 10; /* Keeps menus on top of the 3D world */
     color: white;
     opacity: 1;
-    /* Smooth 5-second cinematic fade duration */
-    transition: opacity 5s ease-in-out, visibility 5s ease-in-out;
     visibility: visible;
+    pointer-events: auto; /* Ensures menus receive clicks */
+    transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
 }
 
-/* Forces full screen fade-out behavior and ignores click interaction blocks */
-.fade-out {
-    opacity: 0 !important;
-    visibility: hidden !important;
-    pointer-events: none !important;
-}
-
+/* Clear display cutoff when hidden */
 .hidden {
     display: none !important;
-}
-
-/* Splash Screen Studio Text Animation */
-.studio-logo {
-    font-size: 3.5rem;
-    letter-spacing: 4px;
-    color: #ffffff;
-    text-transform: uppercase;
-    animation: pulse 2s infinite alternate;
-}
-
-@keyframes pulse {
-    from { text-shadow: 0 0 10px #fff, 0 0 20px #4caf50; }
-    to { text-shadow: 0 0 20px #fff, 0 0 40px #4caf50; }
+    pointer-events: none !important;
 }
 
 /* Title Layout */
@@ -79,6 +64,7 @@ h2 {
     flex-direction: column;
     gap: 15px;
     width: 300px;
+    z-index: 11;
 }
 
 /* Voxel-Style Custom Button UI Elements */
@@ -92,6 +78,7 @@ button {
     border: 3px solid #111;
     cursor: pointer;
     box-shadow: inset -4px -4px #111, inset 4px 4px #555;
+    pointer-events: auto; /* Explicitly enables mouse clicks */
 }
 
 button:hover:not(:disabled) {
@@ -110,27 +97,6 @@ button:disabled {
     box-shadow: none;
 }
 
-/* Loading Bar Track Styling */
-.loading-bar-container {
-    width: 250px;
-    height: 8px;
-    background-color: #222;
-    border: 2px solid #444;
-    border-radius: 4px;
-    margin-top: 20px;
-    overflow: hidden;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
-}
-
-/* Loading Bar Active Fill Animation */
-#loadingBarFill {
-    width: 0%;
-    height: 100%;
-    background-color: #4caf50;
-    box-shadow: 0 0 8px #4caf50;
-    transition: width 0.05s linear;
-}
-
 /* In-Game Heads Up Display Overlay layout */
 #hud {
     position: absolute;
@@ -140,7 +106,7 @@ button:disabled {
     background: rgba(0, 0, 0, 0.5);
     padding: 10px;
     border-radius: 5px;
-    pointer-events: none;
+    pointer-events: none; /* Let movement clicks pass through the HUD background */
     z-index: 5;
     font-size: 1rem;
     line-height: 1.5;
