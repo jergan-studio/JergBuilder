@@ -40,49 +40,9 @@ function init() {
 
     // 5. Handle Screen Resizing Dynamically
     window.addEventListener('resize', onWindowResize);
-    
-    // 6. Engine initialization complete -> Run the splash exit sequence
-    runSplashSequence();
 
     // Begin continuous frame tick render loop
     animate();
-}
-
-function runSplashSequence() {
-    const splash = document.getElementById('splashScreen');
-    const mainMenu = document.getElementById('mainMenu');
-    const barFill = document.getElementById('loadingBarFill');
-
-    if (!splash || !mainMenu || !barFill) {
-        if (mainMenu) mainMenu.classList.remove('hidden');
-        return;
-    }
-
-    let isFinished = false;
-
-    // Direct transition routine out of the splash overlay
-    function removeSplash() {
-        if (isFinished) return;
-        isFinished = true;
-        
-        barFill.style.width = '100%';
-        splash.classList.add('fade-out');
-        mainMenu.classList.remove('hidden');
-        
-        // Wait exactly 5 seconds for the CSS opacity transition to complete
-        setTimeout(() => {
-            splash.classList.add('hidden');
-            splash.removeEventListener('click', removeSplash);
-        }, 5000); 
-    }
-
-    // Allow user to click to force-skip instantly if desired
-    splash.style.cursor = 'pointer';
-    splash.addEventListener('click', removeSplash);
-
-    // Snap the bar forward instantly and start the 5-second fade on resource ready
-    barFill.style.width = '100%';
-    setTimeout(removeSplash, 100); 
 }
 
 function setupPointerLock() {
