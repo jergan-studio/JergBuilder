@@ -1,16 +1,16 @@
 import * as THREE from 'three';
 
-// Safe Module Imports - If these throw errors, check your actual folder names!
+// Safe asynchronous runtime imports to prevent lockouts if modules fail
 let generateMap, Player;
 try {
     const mapMod = await import('../Map/mapGenerator.js');
     generateMap = mapMod.generateMap;
-} catch(e) { console.error("Could not load mapGenerator.js. Check folder path!", e); }
+} catch(e) { console.error("Could not load mapGenerator.js from standard paths.", e); }
 
 try {
     const playerMod = await import('./player.js');
     Player = playerMod.Player;
-} catch(e) { console.error("Could not load player.js. Check folder path!", e); }
+} catch(e) { console.error("Could not load player.js from standard paths.", e); }
 
 let scene, camera, renderer, player;
 let gameRunning = false;
@@ -18,14 +18,16 @@ const canvas = document.getElementById('gameCanvas');
 const clock = new THREE.Clock();
 
 function init() {
+    // 1. Engine Canvas Frame Configurations
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x87CEEB);
+    scene.background = new THREE.Color(0x87CEEB); // Classic Sky Blue
 
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     
     renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
 
+    // 2. Scene Light Environment 
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambientLight);
 
@@ -33,6 +35,7 @@ function init() {
     dirLight.position.set(12, 24, 8);
     scene.add(dirLight);
 
+    // 3. Spawning Entity Logic Blocks safely
     if (Player) {
         try { player = new Player(scene, camera); } catch(e) { console.error(e); }
     }
@@ -76,14 +79,10 @@ function setupMenuEvents() {
 
     const bindClick = (id, callback) => {
         const el = document.getElementById(id);
-        if (el) {
-            el.addEventListener('click', callback);
-        } else {
-            console.warn(`Button ID "${id}" not found in HTML.`);
-        }
+        if (el) el.addEventListener('click', callback);
     };
 
-    // Main Menu Navigation Transitions
+    // Main Menu Navigation Flow Rules
     bindClick('btnWorlds', () => {
         mainMenu.classList.add('hidden');
         worldsMenu.classList.remove('hidden');
@@ -94,7 +93,7 @@ function setupMenuEvents() {
         skinsMenu.classList.remove('hidden');
     });
 
-    // Universal Back Buttons
+    // Globalized Back Button Logic Routines
     document.querySelectorAll('.btnBack').forEach(btn => {
         btn.addEventListener('click', () => {
             if (worldsMenu) worldsMenu.classList.add('hidden');
@@ -103,15 +102,13 @@ function setupMenuEvents() {
         });
     });
 
-    // World Selection Generation
+    // World Map Builder Triggers
     document.querySelectorAll('.world-select').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const chosenWorldType = e.currentTarget.getAttribute('data-world');
             
             if (generateMap) {
                 try { generateMap(scene, chosenWorldType); } catch (err) { console.error(err); }
-            } else {
-                console.warn("Map generator missing, simulating world start.");
             }
             
             if (worldsMenu) worldsMenu.classList.add('hidden');
@@ -122,7 +119,7 @@ function setupMenuEvents() {
         });
     });
 
-    // Skin Selection Configuration
+    // Preset Skins Assigners
     document.querySelectorAll('.skin-select').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const skinName = e.currentTarget.getAttribute('data-skin');
@@ -134,7 +131,7 @@ function setupMenuEvents() {
         });
     });
 
-    // Custom Skin URL Injector
+    // Remote Custom Asset Skin Handlers
     bindClick('btnCustomSkin', () => {
         const url = prompt("Enter custom skin image URL (PNG/JPG):", "https://i.imgur.com/yourImage.png");
         if (url && player && typeof player.setSkin === 'function') {
@@ -144,7 +141,7 @@ function setupMenuEvents() {
         }
     });
 
-    // Pause Routing Controls
+    // In-game Pause Screen Buttons
     bindClick('btnResume', () => {
         if (canvas) canvas.requestPointerLock();
     });
