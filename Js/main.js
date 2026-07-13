@@ -1,16 +1,15 @@
 import * as THREE from 'three';
 
-// Safe asynchronous runtime imports to prevent lockouts if modules fail
 let generateMap, Player;
 try {
     const mapMod = await import('../Map/mapGenerator.js');
     generateMap = mapMod.generateMap;
-} catch(e) { console.error("Could not load mapGenerator.js from standard paths.", e); }
+} catch(e) { console.error("Could not load mapGenerator.js", e); }
 
 try {
     const playerMod = await import('./player.js');
     Player = playerMod.Player;
-} catch(e) { console.error("Could not load player.js from standard paths.", e); }
+} catch(e) { console.error("Could not load player.js", e); }
 
 let scene, camera, renderer, player;
 let gameRunning = false;
@@ -18,16 +17,14 @@ const canvas = document.getElementById('gameCanvas');
 const clock = new THREE.Clock();
 
 function init() {
-    // 1. Engine Canvas Frame Configurations
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x87CEEB); // Classic Sky Blue
+    scene.background = new THREE.Color(0x87CEEB); 
 
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     
     renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
 
-    // 2. Scene Light Environment 
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambientLight);
 
@@ -35,7 +32,6 @@ function init() {
     dirLight.position.set(12, 24, 8);
     scene.add(dirLight);
 
-    // 3. Spawning Entity Logic Blocks safely
     if (Player) {
         try { player = new Player(scene, camera); } catch(e) { console.error(e); }
     }
@@ -76,13 +72,13 @@ function setupMenuEvents() {
     const skinsMenu = document.getElementById('skinsMenu');
     const escMenu = document.getElementById('escMenu');
     const hud = document.getElementById('hud');
+    const seedInput = document.getElementById('worldSeed');
 
     const bindClick = (id, callback) => {
         const el = document.getElementById(id);
         if (el) el.addEventListener('click', callback);
     };
 
-    // Main Menu Navigation Flow Rules
     bindClick('btnWorlds', () => {
         mainMenu.classList.add('hidden');
         worldsMenu.classList.remove('hidden');
@@ -93,7 +89,6 @@ function setupMenuEvents() {
         skinsMenu.classList.remove('hidden');
     });
 
-    // Globalized Back Button Logic Routines
     document.querySelectorAll('.btnBack').forEach(btn => {
         btn.addEventListener('click', () => {
             if (worldsMenu) worldsMenu.classList.add('hidden');
@@ -102,13 +97,14 @@ function setupMenuEvents() {
         });
     });
 
-    // World Map Builder Triggers
+    // Modified click function to read the seed value
     document.querySelectorAll('.world-select').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const chosenWorldType = e.currentTarget.getAttribute('data-world');
+            const rawSeedValue = seedInput ? seedInput.value : "";
             
             if (generateMap) {
-                try { generateMap(scene, chosenWorldType); } catch (err) { console.error(err); }
+                try { generateMap(scene, chosenWorldType, rawSeedValue); } catch (err) { console.error(err); }
             }
             
             if (worldsMenu) worldsMenu.classList.add('hidden');
@@ -119,7 +115,6 @@ function setupMenuEvents() {
         });
     });
 
-    // Preset Skins Assigners
     document.querySelectorAll('.skin-select').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const skinName = e.currentTarget.getAttribute('data-skin');
@@ -131,9 +126,8 @@ function setupMenuEvents() {
         });
     });
 
-    // Remote Custom Asset Skin Handlers
     bindClick('btnCustomSkin', () => {
-        const url = prompt("Enter custom skin image URL (PNG/JPG):", "https://i.imgur.com/yourImage.png");
+        const url = prompt("Enter custom skin image URL:", "https://i.imgur.com/yourImage.png");
         if (url && player && typeof player.setSkin === 'function') {
             player.setSkin('custom', url);
             if (skinsMenu) skinsMenu.classList.add('hidden');
@@ -141,7 +135,6 @@ function setupMenuEvents() {
         }
     });
 
-    // In-game Pause Screen Buttons
     bindClick('btnResume', () => {
         if (canvas) canvas.requestPointerLock();
     });
@@ -182,4 +175,4 @@ function animate() {
     if (renderer && scene && camera) renderer.render(scene, camera);
 }
 
-init();
+init();v
