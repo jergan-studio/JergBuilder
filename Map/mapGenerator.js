@@ -1,95 +1,178 @@
 import * as THREE from 'three';
 
-// Retain tracker references to wipe old generated chunk elements correctly
-let currentWorldMesh = null;
+let generateMap, Player;
+try {
+    const mapMod = await import('../Map/mapGenerator.js');
+    generateMap = mapMod.generateMap;
+} catch(e) { console.error("Could not load mapGenerator.js", e); }
 
-/**
- * Builds high-performance instanced map voxel sets.
- * @param {THREE.Scene} scene - Active container rendering scene hook.
- * @param {string} worldType - Selected geometry configuration matrix identifier.
- */
-export function generateMap(scene, worldType) {
-    // 1. Memory Cleanup: Safely purge active instances to make room for new maps
-    if (currentWorldMesh) {
-        scene.remove(currentWorldMesh);
-        if (currentWorldMesh.geometry) currentWorldMesh.geometry.dispose();
-        if (currentWorldMesh.material) currentWorldMesh.material.dispose();
-        currentWorldMesh = null;
+try {
+    const playerMod = await import('./player.js');
+    Player = playerMod.Player;
+} catch(e) { console.error("Could not load player.js", e); }
+
+let scene, camera, renderer, player;
+let gameRunning = false;
+const canvas = document.getElementById('gameCanvas');
+const clock = new THREE.Clock();
+
+function init() {
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x87CEEB); 
+
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    
+    renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambientLight);
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(12, 24, 8);
+    scene.add(dirLight);
+
+    if (Player) {
+        try { player = new Player(scene, camera); } catch(e) { console.error(e); }
     }
 
-    const gridSizeX = 32;
-    const gridSizeZ = 32;
-    const blocksArray = [];
+    setupMenuEvents();
+    setupPointerLock();
 
-    // 2. Procedural Array Loops
-    for (let x = 0; x < gridSizeX; x++) {
-        for (let z = 0; z < gridSizeZ; z++) {
-            let height = 1; // Base thickness coordinate mapping
+    window.addEventListener('resize', onWindowResize);
+    animate();
+}
 
-            if (worldType === 'hills') {
-                // Creates procedural natural rolling hill logic values smoothly
-                height = Math.floor(
-                    Math.sin(x * 0.2) * 3 + 
-                    Math.cos(z * 0.2) * 3 + 4
-                );
-                if (height < 1) height = 1;
-            }
+function setupPointerLock() {
+    const escMenu = document.getElementById('escMenu');
+    const hud = document.getElementById('hud');
+    if (!canvas) return;
 
-            for (let y = 0; y < height; y++) {
-                let colorHex = 0x557a2b; // Standard Grass Voxel Green
-
-                if (worldType === 'hills') {
-                    if (y === height - 1 && y > 4) {
-                        colorHex = 0xffffff; // Snow capped mountaintops
-                    } else if (y < height - 1 && y > 2) {
-                        colorHex = 0x8b5a2b; // Internal subsurface layers dirt brown
-                    } else if (y <= 2) {
-                        colorHex = 0x708090; // Lowest layers deep bedrock gray
-                    }
-                } else {
-                    if (y < height - 1) {
-                        colorHex = 0x8b5a2b; // Under-surface dirt for Flat variant
-                    }
-                }
-
-                blocksArray.push({
-                    x: x - gridSizeX / 2, // Map center alignment operations
-                    y: y,
-                    z: z - gridSizeZ / 2,
-                    color: new THREE.Color(colorHex)
-                });
-            }
-        }
-    }
-
-    // 3. Allocating Instanced Draw Arrays (Draws all voxels inside a single GPU call)
-    const blockGeometry = new THREE.BoxGeometry(1, 1, 1);
-    const blockMaterial = new THREE.MeshLambertMaterial({ vertexColors: true });
-
-    const instancedMesh = new THREE.InstancedMesh(
-        blockGeometry,
-        blockMaterial,
-        blocksArray.length
-    );
-
-    const tempObject = new THREE.Object3D();
-
-    blocksArray.forEach((block, index) => {
-        tempObject.position.set(block.x, block.y, block.z);
-        tempObject.updateMatrix();
-        
-        instancedMesh.setMatrixAt(index, tempObject.matrix);
-        instancedMesh.setColorAt(index, block.color);
+    canvas.addEventListener('click', () => {
+        if (gameRunning) canvas.requestPointerLock();
     });
 
-    instancedMesh.instanceMatrix.needsUpdate = true;
-    if (instancedMesh.instanceColor) instancedMesh.instanceColor.needsUpdate = true;
-
-    instancedMesh.castShadow = true;
-    instancedMesh.receiveShadow = true;
-
-    scene.add(instancedMesh);
-    currentWorldMesh = instancedMesh;
-    
-    console.log(`[Jergcraft] Generated "${worldType}" terrain layout with ${blocksArray.length} blocks.`);
+    document.addEventListener('pointerlockchange', () => {
+        if (document.pointerLockElement === canvas) {
+            if (escMenu) escMenu.classList.add('hidden');
+            if (hud) hud.classList.remove('hidden');
+            gameRunning = true;
+        } else {
+            if (gameRunning) {
+                if (escMenu) escMenu.classList.remove('hidden');
+                if (hud) hud.classList.add('hidden');
+            }
+        }
+    });
 }
+
+function setupMenuEvents() {
+    const mainMenu = document.getElementById('mainMenu');
+    const worldsMenu = document.getElementById('worldsMenu');
+    const skinsMenu = document.getElementById('skinsMenu');
+    const escMenu = document.getElementById('escMenu');
+    const hud = document.getElementById('hud');
+    const seedInput = document.getElementById('worldSeed');
+
+    const bindClick = (id, callback) => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('click', callback);
+    };
+
+    bindClick('btnWorlds', () => {
+        mainMenu.classList.add('hidden');
+        worldsMenu.classList.remove('hidden');
+    });
+
+    bindClick('btnSkins', () => {
+        mainMenu.classList.add('hidden');
+        skinsMenu.classList.remove('hidden');
+    });
+
+    document.querySelectorAll('.btnBack').forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (worldsMenu) worldsMenu.classList.add('hidden');
+            if (skinsMenu) skinsMenu.classList.add('hidden');
+            if (mainMenu) mainMenu.classList.remove('hidden');
+        });
+    });
+
+    // Modified click function to read the seed value
+    document.querySelectorAll('.world-select').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const chosenWorldType = e.currentTarget.getAttribute('data-world');
+            const rawSeedValue = seedInput ? seedInput.value : "";
+            
+            if (generateMap) {
+                try { generateMap(scene, chosenWorldType, rawSeedValue); } catch (err) { console.error(err); }
+            }
+            
+            if (worldsMenu) worldsMenu.classList.add('hidden');
+            if (hud) hud.classList.remove('hidden');
+            
+            gameRunning = true; 
+            if (canvas) canvas.requestPointerLock(); 
+        });
+    });
+
+    document.querySelectorAll('.skin-select').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const skinName = e.currentTarget.getAttribute('data-skin');
+            if (player && typeof player.setSkin === 'function') {
+                player.setSkin(skinName);
+            }
+            if (skinsMenu) skinsMenu.classList.add('hidden');
+            if (mainMenu) mainMenu.classList.remove('hidden');
+        });
+    });
+
+    bindClick('btnCustomSkin', () => {
+        const url = prompt("Enter custom skin image URL:", "https://i.imgur.com/yourImage.png");
+        if (url && player && typeof player.setSkin === 'function') {
+            player.setSkin('custom', url);
+            if (skinsMenu) skinsMenu.classList.add('hidden');
+            if (mainMenu) mainMenu.classList.remove('hidden');
+        }
+    });
+
+    bindClick('btnResume', () => {
+        if (canvas) canvas.requestPointerLock();
+    });
+
+    bindClick('btnQuit', () => {
+        gameRunning = false;
+        if (document.pointerLockElement === canvas) document.exitPointerLock();
+        if (escMenu) escMenu.classList.add('hidden');
+        if (hud) hud.classList.add('hidden');
+        if (mainMenu) mainMenu.classList.remove('hidden');
+    });
+}
+
+function onWindowResize() {
+    if (!camera || !renderer) return;
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function animate() {
+    requestAnimationFrame(animate);
+    const elapsedTime = clock.getElapsedTime();
+
+    if (gameRunning && player && typeof player.update === 'function') {
+        player.update();
+    }
+    
+    if (scene) {
+        scene.traverse((child) => {
+            if (child.isMesh && child.material && child.material.uniforms) {
+                if (child.material.uniforms.uTime) child.material.uniforms.uTime.value = elapsedTime;
+                if (child.material.uniforms.uCameraPosition && camera) child.material.uniforms.uCameraPosition.value.copy(camera.position);
+            }
+        });
+    }
+    
+    if (renderer && scene && camera) renderer.render(scene, camera);
+}
+
+init();
