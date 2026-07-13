@@ -52,6 +52,7 @@ function setupPointerLock() {
     if (!canvas) return;
 
     canvas.addEventListener('click', () => {
+        // Only request pointer lock if a world has actually been loaded
         if (gameRunning) {
             canvas.requestPointerLock();
         }
@@ -63,10 +64,10 @@ function setupPointerLock() {
             if (hud) hud.classList.remove('hidden');
             gameRunning = true;
         } else {
+            // If pointer lock drops while running, open pause window menu
             if (gameRunning) {
                 if (escMenu) escMenu.classList.remove('hidden');
                 if (hud) hud.classList.add('hidden');
-                gameRunning = false;
             }
         }
     });
@@ -84,7 +85,7 @@ function setupMenuEvents() {
         if (el) el.addEventListener('click', callback);
     };
 
-    // Main Menu Navigation
+    // Main Menu Navigation Transitions
     bindClick('btnWorlds', () => {
         if (mainMenu && worldsMenu) {
             mainMenu.classList.add('hidden');
@@ -99,6 +100,7 @@ function setupMenuEvents() {
         }
     });
 
+    // Handle universal back button components cleanly
     document.querySelectorAll('.btnBack').forEach(btn => {
         btn.addEventListener('click', () => {
             if (worldsMenu) worldsMenu.classList.add('hidden');
@@ -107,10 +109,11 @@ function setupMenuEvents() {
         });
     });
 
-    // World Selection Generation Interface
+    // World Selection Selection Trigger Hooks
     document.querySelectorAll('.world-select').forEach(btn => {
         btn.addEventListener('click', (e) => {
-            const chosenWorldType = e.target.getAttribute('data-world');
+            // FIX: Use currentTarget to guarantee we read from the button element, even if inner text was clicked
+            const chosenWorldType = e.currentTarget.getAttribute('data-world');
             
             try {
                 generateMap(scene, chosenWorldType);
@@ -121,23 +124,25 @@ function setupMenuEvents() {
             if (worldsMenu) worldsMenu.classList.add('hidden');
             if (hud) hud.classList.remove('hidden');
             
+            // Set game running status before pointer lock request fires
             gameRunning = true; 
             if (canvas) canvas.requestPointerLock(); 
         });
     });
 
-    // Preset Skins Selector System
+    // Skin Configuration Selection Elements
     document.querySelectorAll('.skin-select').forEach(btn => {
         btn.addEventListener('click', (e) => {
+            // FIX: Use currentTarget here to safely read the skin attribute 
             if (player && typeof player.setSkin === 'function') {
-                player.setSkin(e.target.getAttribute('data-skin'));
+                player.setSkin(e.currentTarget.getAttribute('data-skin'));
             }
             if (skinsMenu) skinsMenu.classList.add('hidden');
             if (mainMenu) mainMenu.classList.remove('hidden');
         });
     });
 
-    // External Custom URL Image Skin Injector
+    // Custom Image URL Injector Button Element
     bindClick('btnCustomSkin', () => {
         const url = prompt("Enter custom skin image URL (PNG/JPG):", "https://i.imgur.com/yourImage.png");
         if (url && player && typeof player.setSkin === 'function') {
@@ -147,15 +152,19 @@ function setupMenuEvents() {
         }
     });
 
-    // Pause Menu Options
+    // Esc Pause Panel Routing Menu Logic
     bindClick('btnResume', () => {
         if (canvas) canvas.requestPointerLock();
     });
 
     bindClick('btnQuit', () => {
-        if (escMenu) escMenu.classList.add('hidden');
-        if (mainMenu) mainMenu.classList.remove('hidden');
         gameRunning = false;
+        if (document.pointerLockElement === canvas) {
+            document.exitPointerLock();
+        }
+        if (escMenu) escMenu.classList.add('hidden');
+        if (hud) hud.classList.add('hidden');
+        if (mainMenu) mainMenu.classList.remove('hidden');
     });
 }
 
@@ -171,11 +180,12 @@ function animate() {
     
     const elapsedTime = clock.getElapsedTime();
 
+    // Allow internal player movement mechanics updates when system status is active
     if (gameRunning && player && typeof player.update === 'function') {
         player.update();
     }
     
-    // Scan all active meshes to sync PBR variables dynamically
+    // Cycle all engine rendering geometries to pipe in updated PBR parameters
     if (scene) {
         scene.traverse((child) => {
             if (child.isMesh && child.material && child.material.uniforms) {
@@ -194,4 +204,5 @@ function animate() {
     }
 }
 
+// Kickstart engine core
 init();
