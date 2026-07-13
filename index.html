@@ -19,6 +19,7 @@
 
     <div id="mainMenu" class="overlay">
         <h1>Jergcraft</h1>
+        <div style="color: #888; margin-top: -25px; margin-bottom: 30px; font-size: 1.2rem; letter-spacing: 2px;">JAVASCRIPT EDITION</div>
         <div class="menu-buttons">
             <button id="btnWorlds">Worlds</button>
             <button id="btnSkins">Skins</button>
@@ -28,6 +29,12 @@
 
     <div id="worldsMenu" class="overlay hidden">
         <h2>Select World</h2>
+        
+        <div style="margin-bottom: 20px; width: 300px; display: flex; flex-direction: column; gap: 5px;">
+            <label for="worldSeed" style="font-size: 0.9rem; color: #aaa; text-align: left;">World Seed:</label>
+            <input type="text" id="worldSeed" placeholder="Leave blank for random" style="padding: 10px; background: #222; border: 2px solid #444; color: white; font-family: inherit; font-size: 1rem;">
+        </div>
+
         <div class="menu-buttons">
             <button class="world-select" data-world="flat">Flat World (PBR Shaders)</button>
             <button class="world-select" data-world="hills">Hilly World (PBR Shaders)</button>
