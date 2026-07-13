@@ -27,19 +27,42 @@
         </div>
     </div>
 
-    <div id="worldsMenu" class="overlay hidden">
-        <h2>Select World</h2>
+    <div id="worldsMenu" class="overlay hidden" style="flex-direction: row; gap: 60px; padding: 40px; box-sizing: border-box;">
         
-        <div style="margin-bottom: 20px; width: 300px; display: flex; flex-direction: column; gap: 5px;">
-            <label for="worldSeed" style="font-size: 0.9rem; color: #aaa; text-align: left;">World Seed:</label>
-            <input type="text" id="worldSeed" placeholder="Leave blank for random" style="padding: 10px; background: #222; border: 2px solid #444; color: white; font-family: inherit; font-size: 1rem;">
+        <div style="display: flex; flex-direction: column; width: 320px;">
+            <h2 style="margin-bottom: 20px; text-align: left; color: #4caf50;">WORLDS</h2>
+            <div class="menu-buttons" style="width: 100%;">
+                <button class="world-select" data-world="world1" style="text-align: left;">📁 World 1</button>
+                <button class="world-select" data-world="world2" style="text-align: left;">📁 World 2</button>
+                <button class="btnBack" style="margin-top: 40px; background-color: #444;">Back to Menu</button>
+            </div>
         </div>
 
-        <div class="menu-buttons">
-            <button class="world-select" data-world="flat">Flat World (PBR Shaders)</button>
-            <button class="world-select" data-world="hills">Hilly World (PBR Shaders)</button>
-            <button class="btnBack">Back to Menu</button>
+        <div style="width: 4px; height: 70%; background: #333; align-self: center;"></div>
+
+        <div style="display: flex; flex-direction: column; width: 350px; text-align: left;">
+            <h2 style="margin-bottom: 25px; color: #4caf50;">New Worlds</h2>
+            
+            <div style="background: rgba(0,0,0,0.2); padding: 20px; border: 3px solid #222; display: flex; flex-direction: column; gap: 20px;">
+                <h3 style="margin: 0; font-size: 1.3rem; text-transform: uppercase; letter-spacing: 1px;">New World</h3>
+                
+                <div style="display: flex; flex-direction: column; gap: 5px;">
+                    <label for="worldSeed" style="font-size: 0.85rem; color: #888;">Seed:</label>
+                    <input type="text" id="worldSeed" placeholder="00000000" style="padding: 12px; background: #111; border: 2px solid #444; color: #4caf50; font-family: inherit; font-size: 1.1rem; letter-spacing: 1px;">
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <span style="font-size: 0.85rem; color: #888;">Mode:</span>
+                    <div style="display: flex; gap: 10px;">
+                        <button id="modeCreative" class="mode-toggle active-mode" style="flex: 1; padding: 10px; font-size: 0.95rem;">Creative</button>
+                        <button id="modeSurvival" class="mode-toggle" style="flex: 1; padding: 10px; font-size: 0.95rem; opacity: 0.5; filter: grayscale(1);">Survival</button>
+                    </div>
+                </div>
+
+                <button id="btnCreateWorld" style="background-color: #4caf50; color: black; border-color: #2e6930; font-size: 1.3rem; margin-top: 10px; box-shadow: inset -4px -4px #2e6930, inset 4px 4px #81c784;">[create]</button>
+            </div>
         </div>
+
     </div>
 
     <div id="skinsMenu" class="overlay hidden">
@@ -65,9 +88,9 @@
         <div id="ui">
             Click window to look | WASD to Move | Press SPACE to Jump | Press ESC to pause
             <br><br>
+            <span id="hudGamemodeDisplay" style="background: #4caf50; color: black; padding: 2px 6px; font-weight: bold; margin-right: 10px; text-transform: uppercase;">CREATIVE MODE</span>
             <label for="blockColor" style="vertical-align: middle;">Block Color: </label>
             <input type="color" id="blockColor" value="#557a2b" style="vertical-align: middle; cursor: pointer;">
-            <span style="margin-left: 10px;">Left-Click to PLACE block</span>
         </div>
     </div>
 
