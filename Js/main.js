@@ -1,71 +1,3 @@
-import * as THREE from 'three';
-
-let generateMap, Player;
-try {
-    const mapMod = await import('../Map/mapGenerator.js');
-    generateMap = mapMod.generateMap;
-} catch(e) { console.error("Could not load mapGenerator.js", e); }
-
-try {
-    const playerMod = await import('./player.js');
-    Player = playerMod.Player;
-} catch(e) { console.error("Could not load player.js", e); }
-
-let scene, camera, renderer, player;
-let gameRunning = false;
-const canvas = document.getElementById('gameCanvas');
-const clock = new THREE.Clock();
-
-function init() {
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x87CEEB); 
-
-    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    
-    renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-    scene.add(ambientLight);
-
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    dirLight.position.set(12, 24, 8);
-    scene.add(dirLight);
-
-    if (Player) {
-        try { player = new Player(scene, camera); } catch(e) { console.error(e); }
-    }
-
-    setupMenuEvents();
-    setupPointerLock();
-
-    window.addEventListener('resize', onWindowResize);
-    animate();
-}
-
-function setupPointerLock() {
-    const escMenu = document.getElementById('escMenu');
-    const hud = document.getElementById('hud');
-    if (!canvas) return;
-
-    canvas.addEventListener('click', () => {
-        if (gameRunning) canvas.requestPointerLock();
-    });
-
-    document.addEventListener('pointerlockchange', () => {
-        if (document.pointerLockElement === canvas) {
-            if (escMenu) escMenu.classList.add('hidden');
-            if (hud) hud.classList.remove('hidden');
-            gameRunning = true;
-        } else {
-            if (gameRunning) {
-                if (escMenu) escMenu.classList.remove('hidden');
-                if (hud) hud.classList.add('hidden');
-            }
-        }
-    });
-}
-
 function setupMenuEvents() {
     const mainMenu = document.getElementById('mainMenu');
     const worldsMenu = document.getElementById('worldsMenu');
@@ -73,12 +5,17 @@ function setupMenuEvents() {
     const escMenu = document.getElementById('escMenu');
     const hud = document.getElementById('hud');
     const seedInput = document.getElementById('worldSeed');
+    const hudGamemodeDisplay = document.getElementById('hudGamemodeDisplay');
+
+    // Default parameters for the generation console
+    let selectedGamemode = 'creative';
 
     const bindClick = (id, callback) => {
         const el = document.getElementById(id);
         if (el) el.addEventListener('click', callback);
     };
 
+    // Main Navigation Routing Loops
     bindClick('btnWorlds', () => {
         mainMenu.classList.add('hidden');
         worldsMenu.classList.remove('hidden');
@@ -97,24 +34,70 @@ function setupMenuEvents() {
         });
     });
 
-    // Modified click function to read the seed value
+    // Gamemode Button Switches
+    const btnCreative = document.getElementById('modeCreative');
+    const btnSurvival = document.getElementById('modeSurvival');
+
+    if (btnCreative && btnSurvival) {
+        btnCreative.addEventListener('click', () => {
+            selectedGamemode = 'creative';
+            btnCreative.style.opacity = "1";
+            btnCreative.style.filter = "none";
+            btnSurvival.style.opacity = "0.5";
+            btnSurvival.style.filter = "grayscale(1)";
+        });
+
+        btnSurvival.addEventListener('click', () => {
+            selectedGamemode = 'survival';
+            btnSurvival.style.opacity = "1";
+            btnSurvival.style.filter = "none";
+            btnCreative.style.opacity = "0.5";
+            btnCreative.style.filter = "grayscale(1)";
+        });
+    }
+
+    // Launch Handler: Existing Saved Slots (World 1 & World 2)
     document.querySelectorAll('.world-select').forEach(btn => {
         btn.addEventListener('click', (e) => {
-            const chosenWorldType = e.currentTarget.getAttribute('data-world');
-            const rawSeedValue = seedInput ? seedInput.value : "";
+            const worldSlot = e.currentTarget.getAttribute('data-world');
             
+            // Simulates loading predetermined flat seeds for static world slots
             if (generateMap) {
-                try { generateMap(scene, chosenWorldType, rawSeedValue); } catch (err) { console.error(err); }
+                try { generateMap(scene, 'flat', worldSlot); } catch (err) { console.error(err); }
             }
+
+            if (hudGamemodeDisplay) hudGamemodeDisplay.innerText = "CREATIVE MODE";
             
-            if (worldsMenu) worldsMenu.classList.add('hidden');
-            if (hud) hud.classList.remove('hidden');
-            
-            gameRunning = true; 
-            if (canvas) canvas.requestPointerLock(); 
+            launchGame();
         });
     });
 
+    // Launch Handler: New Custom World Engine Generator Trigger
+    bindClick('btnCreateWorld', () => {
+        const rawSeedValue = seedInput ? seedInput.value : "";
+        
+        // Generates dynamic hills variant using parameters selected by user
+        if (generateMap) {
+            try { generateMap(scene, 'hills', rawSeedValue); } catch (err) { console.error(err); }
+        }
+
+        // Apply mode settings straight into HUD overlay variables
+        if (hudGamemodeDisplay) {
+            hudGamemodeDisplay.innerText = `${selectedGamemode} mode`;
+            hudGamemodeDisplay.style.backgroundColor = selectedGamemode === 'survival' ? '#f44336' : '#4caf50';
+        }
+
+        launchGame();
+    });
+
+    function launchGame() {
+        if (worldsMenu) worldsMenu.classList.add('hidden');
+        if (hud) hud.classList.remove('hidden');
+        gameRunning = true; 
+        if (canvas) canvas.requestPointerLock(); 
+    }
+
+    // Preset Skins Assignment Routers
     document.querySelectorAll('.skin-select').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const skinName = e.currentTarget.getAttribute('data-skin');
@@ -127,7 +110,7 @@ function setupMenuEvents() {
     });
 
     bindClick('btnCustomSkin', () => {
-        const url = prompt("Enter custom skin image URL:", "https://i.imgur.com/yourImage.png");
+        const url = prompt("Enter skin URL:", "https://i.imgur.com/yourImage.png");
         if (url && player && typeof player.setSkin === 'function') {
             player.setSkin('custom', url);
             if (skinsMenu) skinsMenu.classList.add('hidden');
@@ -147,32 +130,3 @@ function setupMenuEvents() {
         if (mainMenu) mainMenu.classList.remove('hidden');
     });
 }
-
-function onWindowResize() {
-    if (!camera || !renderer) return;
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-}
-
-function animate() {
-    requestAnimationFrame(animate);
-    const elapsedTime = clock.getElapsedTime();
-
-    if (gameRunning && player && typeof player.update === 'function') {
-        player.update();
-    }
-    
-    if (scene) {
-        scene.traverse((child) => {
-            if (child.isMesh && child.material && child.material.uniforms) {
-                if (child.material.uniforms.uTime) child.material.uniforms.uTime.value = elapsedTime;
-                if (child.material.uniforms.uCameraPosition && camera) child.material.uniforms.uCameraPosition.value.copy(camera.position);
-            }
-        });
-    }
-    
-    if (renderer && scene && camera) renderer.render(scene, camera);
-}
-
-init();v
