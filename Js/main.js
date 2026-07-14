@@ -1,27 +1,19 @@
 import * as THREE from 'three';
 
-// --- BULLETPROOF SAFETIES ---
-// We load these dynamically inside safe blocks so if your player.js or mapGenerator.js 
-// have issues, it won't crash your main menu buttons!
 let generateMap = null;
 let Player = null;
 
-async function loadGameModules() {
+// Safe loading wrapper prevents missing file exceptions from locking menus
+async function safelyLoadModules() {
     try {
         const mapMod = await import('../Map/mapGenerator.js');
         generateMap = mapMod.generateMap;
-        console.log("[Jergcraft] mapGenerator.js loaded successfully.");
-    } catch (e) {
-        console.warn("[Jergcraft Warning] Map generator failed to load. Check your 'Map' folder name capitalization!", e);
-    }
+    } catch (e) { console.error("Could not load Map/mapGenerator.js", e); }
 
     try {
         const playerMod = await import('./player.js');
         Player = playerMod.Player;
-        console.log("[Jergcraft] player.js loaded successfully.");
-    } catch (e) {
-        console.warn("[Jergcraft Warning] player.js failed to load. Check your 'Js' folder contents!", e);
-    }
+    } catch (e) { console.error("Could not load Js/player.js", e); }
 }
 
 let scene, camera, renderer, player;
@@ -30,10 +22,8 @@ const canvas = document.getElementById('gameCanvas');
 const clock = new THREE.Clock();
 
 async function init() {
-    // 1. Wait for modules to load safely without crashing the script execution
-    await loadGameModules();
+    await safelyLoadModules();
 
-    // 2. Scene setup
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x87CEEB); 
 
@@ -51,16 +41,10 @@ async function init() {
     dirLight.position.set(12, 24, 8);
     scene.add(dirLight);
 
-    // 3. Try to build the player structure if framework exists
     if (Player) {
-        try { 
-            player = new Player(scene, camera); 
-        } catch(e) { 
-            console.error("[Jergcraft] Player class instantiation failed:", e); 
-        }
+        try { player = new Player(scene, camera); } catch(e) { console.error(e); }
     }
 
-    // 4. Bind the buttons ALWAYS (even if 3D rendering setup has issues)
     setupMenuEvents();
     setupPointerLock();
 
@@ -79,12 +63,12 @@ function setupPointerLock() {
 
     document.addEventListener('pointerlockchange', () => {
         if (document.pointerLockElement === canvas) {
-            if (escMenu) escMenu.classList.add('hidden');
+            if (escMenu) { escMenu.classList.add('hidden'); escMenu.style.display = 'none'; }
             if (hud) hud.classList.remove('hidden');
             gameRunning = true;
         } else {
             if (gameRunning) {
-                if (escMenu) escMenu.classList.remove('hidden');
+                if (escMenu) { escMenu.classList.remove('hidden'); escMenu.style.display = 'flex'; }
                 if (hud) hud.classList.add('hidden');
             }
         }
@@ -102,53 +86,38 @@ function setupMenuEvents() {
 
     let selectedGamemode = 'creative';
 
-    // Helper setup to confirm clicking access
     const safeBindClick = (id, callback) => {
         const el = document.getElementById(id);
-        if (el) {
-            el.addEventListener('click', callback);
-        } else {
-            console.error(`[Jergcraft Error] Target ID "${id}" is missing from your HTML.`);
-        }
+        if (el) el.addEventListener('click', callback);
     };
 
-    // Open Worlds Menu Screen
+    // Main Menu Switching Logic
     safeBindClick('btnWorlds', () => {
-        console.log("Worlds button clicked!");
         if (mainMenu) mainMenu.classList.add('hidden');
         if (worldsMenu) {
             worldsMenu.classList.remove('hidden');
-            // Force display layout fix for Vercel styling updates
-            worldsMenu.style.display = 'flex'; 
+            worldsMenu.style.setProperty('display', 'flex', 'important'); 
         }
     });
 
-    // Open Skins Menu Screen
     safeBindClick('btnSkins', () => {
-        console.log("Skins button clicked!");
         if (mainMenu) mainMenu.classList.add('hidden');
         if (skinsMenu) {
             skinsMenu.classList.remove('hidden');
-            skinsMenu.style.display = 'flex';
+            skinsMenu.style.setProperty('display', 'flex', 'important');
         }
     });
 
-    // Universal Back Navigation Actions
+    // Back Buttons
     document.querySelectorAll('.btnBack').forEach(btn => {
         btn.addEventListener('click', () => {
-            if (worldsMenu) {
-                worldsMenu.classList.add('hidden');
-                worldsMenu.style.display = 'none';
-            }
-            if (skinsMenu) {
-                skinsMenu.classList.add('hidden');
-                skinsMenu.style.display = 'none';
-            }
+            if (worldsMenu) { worldsMenu.classList.add('hidden'); worldsMenu.style.display = 'none'; }
+            if (skinsMenu) { skinsMenu.classList.add('hidden'); skinsMenu.style.display = 'none'; }
             if (mainMenu) mainMenu.classList.remove('hidden');
         });
     });
 
-    // Gamemode Button Selections
+    // Mode Buttons
     const btnCreative = document.getElementById('modeCreative');
     const btnSurvival = document.getElementById('modeSurvival');
 
@@ -174,16 +143,13 @@ function setupMenuEvents() {
         });
     }
 
-    // World Slot Loaders (World 1 & World 2)
+    // World Selection Launchers
     document.querySelectorAll('.world-select').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const worldSlot = e.currentTarget.getAttribute('data-world');
             if (generateMap) {
                 try { generateMap(scene, 'flat', worldSlot); } catch (err) { console.error(err); }
-            } else {
-                console.warn("Map module missing, starting blank environment.");
             }
-
             if (hudGamemodeDisplay) {
                 hudGamemodeDisplay.innerText = "CREATIVE MODE";
                 hudGamemodeDisplay.style.backgroundColor = '#4caf50';
@@ -192,16 +158,12 @@ function setupMenuEvents() {
         });
     });
 
-    // Custom Map Generator Launch Trigger
+    // Custom Hilly seed generator builder button
     safeBindClick('btnCreateWorld', () => {
         const rawSeedValue = seedInput ? seedInput.value : "";
-        
         if (generateMap) {
             try { generateMap(scene, 'hills', rawSeedValue); } catch (err) { console.error(err); }
-        } else {
-            console.warn("Map generator missing, starting default terrain.");
         }
-
         if (hudGamemodeDisplay) {
             hudGamemodeDisplay.innerText = `${selectedGamemode} mode`;
             hudGamemodeDisplay.style.backgroundColor = selectedGamemode === 'survival' ? '#f44336' : '#4caf50';
@@ -210,43 +172,33 @@ function setupMenuEvents() {
     });
 
     function launchGame() {
-        if (worldsMenu) {
-            worldsMenu.classList.add('hidden');
-            worldsMenu.style.display = 'none';
-        }
+        if (worldsMenu) { worldsMenu.classList.add('hidden'); worldsMenu.style.display = 'none'; }
         if (hud) hud.classList.remove('hidden');
         gameRunning = true; 
         if (canvas) canvas.requestPointerLock(); 
     }
 
-    // Skins Swapper Hook Array
+    // Skins Configuration listeners
     document.querySelectorAll('.skin-select').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const skinName = e.currentTarget.getAttribute('data-skin');
             if (player && typeof player.setSkin === 'function') {
                 player.setSkin(skinName);
             }
-            if (skinsMenu) {
-                skinsMenu.classList.add('hidden');
-                skinsMenu.style.display = 'none';
-            }
+            if (skinsMenu) { skinsMenu.classList.add('hidden'); skinsMenu.style.display = 'none'; }
             if (mainMenu) mainMenu.classList.remove('hidden');
         });
     });
 
     safeBindClick('btnCustomSkin', () => {
-        const url = prompt("Enter skin image URL:", "https://i.imgur.com/yourImage.png");
+        const url = prompt("Enter skin URL:", "https://i.imgur.com/yourImage.png");
         if (url && player && typeof player.setSkin === 'function') {
             player.setSkin('custom', url);
-            if (skinsMenu) {
-                skinsMenu.classList.add('hidden');
-                skinsMenu.style.display = 'none';
-            }
+            if (skinsMenu) { skinsMenu.classList.add('hidden'); skinsMenu.style.display = 'none'; }
             if (mainMenu) mainMenu.classList.remove('hidden');
         }
     });
 
-    // Pause UI Controls
     safeBindClick('btnResume', () => {
         if (canvas) canvas.requestPointerLock();
     });
@@ -254,7 +206,7 @@ function setupMenuEvents() {
     safeBindClick('btnQuit', () => {
         gameRunning = false;
         if (document.pointerLockElement === canvas) document.exitPointerLock();
-        if (escMenu) escMenu.classList.add('hidden');
+        if (escMenu) { escMenu.classList.add('hidden'); escMenu.style.display = 'none'; }
         if (hud) hud.classList.add('hidden');
         if (mainMenu) mainMenu.classList.remove('hidden');
     });
