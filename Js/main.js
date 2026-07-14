@@ -1,23 +1,49 @@
 import * as THREE from 'three';
-import { generateMap } from '../Map/mapGenerator.js';
-import { Player } from './player.js';
+
+// --- BULLETPROOF SAFETIES ---
+// We load these dynamically inside safe blocks so if your player.js or mapGenerator.js 
+// have issues, it won't crash your main menu buttons!
+let generateMap = null;
+let Player = null;
+
+async function loadGameModules() {
+    try {
+        const mapMod = await import('../Map/mapGenerator.js');
+        generateMap = mapMod.generateMap;
+        console.log("[Jergcraft] mapGenerator.js loaded successfully.");
+    } catch (e) {
+        console.warn("[Jergcraft Warning] Map generator failed to load. Check your 'Map' folder name capitalization!", e);
+    }
+
+    try {
+        const playerMod = await import('./player.js');
+        Player = playerMod.Player;
+        console.log("[Jergcraft] player.js loaded successfully.");
+    } catch (e) {
+        console.warn("[Jergcraft Warning] player.js failed to load. Check your 'Js' folder contents!", e);
+    }
+}
 
 let scene, camera, renderer, player;
 let gameRunning = false;
 const canvas = document.getElementById('gameCanvas');
 const clock = new THREE.Clock();
 
-function init() {
-    // 1. Scene Core Setup
+async function init() {
+    // 1. Wait for modules to load safely without crashing the script execution
+    await loadGameModules();
+
+    // 2. Scene setup
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x87CEEB); 
 
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     
-    renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    if (canvas) {
+        renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    }
 
-    // 2. Scene Lighting
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambientLight);
 
@@ -25,14 +51,16 @@ function init() {
     dirLight.position.set(12, 24, 8);
     scene.add(dirLight);
 
-    // 3. Spawning Player Instance
-    try { 
-        player = new Player(scene, camera); 
-    } catch(e) { 
-        console.error("[Jergcraft Error] Player framework failed to initialize:", e); 
+    // 3. Try to build the player structure if framework exists
+    if (Player) {
+        try { 
+            player = new Player(scene, camera); 
+        } catch(e) { 
+            console.error("[Jergcraft] Player class instantiation failed:", e); 
+        }
     }
 
-    // 4. Initialize Core Event Systems
+    // 4. Bind the buttons ALWAYS (even if 3D rendering setup has issues)
     setupMenuEvents();
     setupPointerLock();
 
@@ -74,41 +102,53 @@ function setupMenuEvents() {
 
     let selectedGamemode = 'creative';
 
-    // Diagnostic tool to make sure buttons exist
+    // Helper setup to confirm clicking access
     const safeBindClick = (id, callback) => {
         const el = document.getElementById(id);
         if (el) {
             el.addEventListener('click', callback);
         } else {
-            console.error(`[Jergcraft Error] Could not find button with ID: "${id}" in your HTML structure.`);
+            console.error(`[Jergcraft Error] Target ID "${id}" is missing from your HTML.`);
         }
     };
 
-    // Navigation Panels
+    // Open Worlds Menu Screen
     safeBindClick('btnWorlds', () => {
-        if (mainMenu && worldsMenu) {
-            mainMenu.classList.add('hidden');
+        console.log("Worlds button clicked!");
+        if (mainMenu) mainMenu.classList.add('hidden');
+        if (worldsMenu) {
             worldsMenu.classList.remove('hidden');
+            // Force display layout fix for Vercel styling updates
+            worldsMenu.style.display = 'flex'; 
         }
     });
 
+    // Open Skins Menu Screen
     safeBindClick('btnSkins', () => {
-        if (mainMenu && skinsMenu) {
-            mainMenu.classList.add('hidden');
+        console.log("Skins button clicked!");
+        if (mainMenu) mainMenu.classList.add('hidden');
+        if (skinsMenu) {
             skinsMenu.classList.remove('hidden');
+            skinsMenu.style.display = 'flex';
         }
     });
 
-    // Globalized Back Button Arrays
+    // Universal Back Navigation Actions
     document.querySelectorAll('.btnBack').forEach(btn => {
         btn.addEventListener('click', () => {
-            if (worldsMenu) worldsMenu.classList.add('hidden');
-            if (skinsMenu) skinsMenu.classList.add('hidden');
+            if (worldsMenu) {
+                worldsMenu.classList.add('hidden');
+                worldsMenu.style.display = 'none';
+            }
+            if (skinsMenu) {
+                skinsMenu.classList.add('hidden');
+                skinsMenu.style.display = 'none';
+            }
             if (mainMenu) mainMenu.classList.remove('hidden');
         });
     });
 
-    // Gamemode Selection Controllers
+    // Gamemode Button Selections
     const btnCreative = document.getElementById('modeCreative');
     const btnSurvival = document.getElementById('modeSurvival');
 
@@ -118,7 +158,6 @@ function setupMenuEvents() {
             btnCreative.style.backgroundColor = "#4caf50";
             btnCreative.style.color = "black";
             btnCreative.style.opacity = "1";
-            
             btnSurvival.style.backgroundColor = "#333";
             btnSurvival.style.color = "white";
             btnSurvival.style.opacity = "0.5";
@@ -129,21 +168,20 @@ function setupMenuEvents() {
             btnSurvival.style.backgroundColor = "#f44336";
             btnSurvival.style.color = "white";
             btnSurvival.style.opacity = "1";
-            
             btnCreative.style.backgroundColor = "#333";
             btnCreative.style.color = "white";
             btnCreative.style.opacity = "0.5";
         });
     }
 
-    // World Slot Triggers (World 1 & World 2)
+    // World Slot Loaders (World 1 & World 2)
     document.querySelectorAll('.world-select').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const worldSlot = e.currentTarget.getAttribute('data-world');
-            try { 
-                generateMap(scene, 'flat', worldSlot); 
-            } catch (err) { 
-                console.error("[Jergcraft] Map gen crash on world-select:", err); 
+            if (generateMap) {
+                try { generateMap(scene, 'flat', worldSlot); } catch (err) { console.error(err); }
+            } else {
+                console.warn("Map module missing, starting blank environment.");
             }
 
             if (hudGamemodeDisplay) {
@@ -154,14 +192,14 @@ function setupMenuEvents() {
         });
     });
 
-    // Custom Seed Generator Trigger ([create] button)
+    // Custom Map Generator Launch Trigger
     safeBindClick('btnCreateWorld', () => {
         const rawSeedValue = seedInput ? seedInput.value : "";
         
-        try { 
-            generateMap(scene, 'hills', rawSeedValue); 
-        } catch (err) { 
-            console.error("[Jergcraft] Map gen crash on btnCreateWorld:", err); 
+        if (generateMap) {
+            try { generateMap(scene, 'hills', rawSeedValue); } catch (err) { console.error(err); }
+        } else {
+            console.warn("Map generator missing, starting default terrain.");
         }
 
         if (hudGamemodeDisplay) {
@@ -172,34 +210,43 @@ function setupMenuEvents() {
     });
 
     function launchGame() {
-        if (worldsMenu) worldsMenu.classList.add('hidden');
+        if (worldsMenu) {
+            worldsMenu.classList.add('hidden');
+            worldsMenu.style.display = 'none';
+        }
         if (hud) hud.classList.remove('hidden');
         gameRunning = true; 
         if (canvas) canvas.requestPointerLock(); 
     }
 
-    // Skin Customization
+    // Skins Swapper Hook Array
     document.querySelectorAll('.skin-select').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const skinName = e.currentTarget.getAttribute('data-skin');
             if (player && typeof player.setSkin === 'function') {
                 player.setSkin(skinName);
             }
-            if (skinsMenu) skinsMenu.classList.add('hidden');
+            if (skinsMenu) {
+                skinsMenu.classList.add('hidden');
+                skinsMenu.style.display = 'none';
+            }
             if (mainMenu) mainMenu.classList.remove('hidden');
         });
     });
 
     safeBindClick('btnCustomSkin', () => {
-        const url = prompt("Enter skin URL:", "https://i.imgur.com/yourImage.png");
+        const url = prompt("Enter skin image URL:", "https://i.imgur.com/yourImage.png");
         if (url && player && typeof player.setSkin === 'function') {
             player.setSkin('custom', url);
-            if (skinsMenu) skinsMenu.classList.add('hidden');
+            if (skinsMenu) {
+                skinsMenu.classList.add('hidden');
+                skinsMenu.style.display = 'none';
+            }
             if (mainMenu) mainMenu.classList.remove('hidden');
         }
     });
 
-    // Esc Menu Resumes
+    // Pause UI Controls
     safeBindClick('btnResume', () => {
         if (canvas) canvas.requestPointerLock();
     });
@@ -240,5 +287,4 @@ function animate() {
     if (renderer && scene && camera) renderer.render(scene, camera);
 }
 
-// Kickstart engine core execution window
 init();
