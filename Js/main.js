@@ -8,6 +8,7 @@ const canvas = document.getElementById('gameCanvas');
 const clock = new THREE.Clock();
 
 function init() {
+    // 1. Scene Core Setup
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x87CEEB); 
 
@@ -16,6 +17,7 @@ function init() {
     renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
 
+    // 2. Scene Lighting
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambientLight);
 
@@ -23,12 +25,14 @@ function init() {
     dirLight.position.set(12, 24, 8);
     scene.add(dirLight);
 
+    // 3. Spawning Player Instance
     try { 
         player = new Player(scene, camera); 
     } catch(e) { 
-        console.error("Player initialization error:", e); 
+        console.error("[Jergcraft Error] Player framework failed to initialize:", e); 
     }
 
+    // 4. Initialize Core Event Systems
     setupMenuEvents();
     setupPointerLock();
 
@@ -70,21 +74,32 @@ function setupMenuEvents() {
 
     let selectedGamemode = 'creative';
 
-    const bindClick = (id, callback) => {
+    // Diagnostic tool to make sure buttons exist
+    const safeBindClick = (id, callback) => {
         const el = document.getElementById(id);
-        if (el) el.addEventListener('click', callback);
+        if (el) {
+            el.addEventListener('click', callback);
+        } else {
+            console.error(`[Jergcraft Error] Could not find button with ID: "${id}" in your HTML structure.`);
+        }
     };
 
-    bindClick('btnWorlds', () => {
-        mainMenu.classList.add('hidden');
-        worldsMenu.classList.remove('hidden');
+    // Navigation Panels
+    safeBindClick('btnWorlds', () => {
+        if (mainMenu && worldsMenu) {
+            mainMenu.classList.add('hidden');
+            worldsMenu.classList.remove('hidden');
+        }
     });
 
-    bindClick('btnSkins', () => {
-        mainMenu.classList.add('hidden');
-        skinsMenu.classList.remove('hidden');
+    safeBindClick('btnSkins', () => {
+        if (mainMenu && skinsMenu) {
+            mainMenu.classList.add('hidden');
+            skinsMenu.classList.remove('hidden');
+        }
     });
 
+    // Globalized Back Button Arrays
     document.querySelectorAll('.btnBack').forEach(btn => {
         btn.addEventListener('click', () => {
             if (worldsMenu) worldsMenu.classList.add('hidden');
@@ -93,7 +108,7 @@ function setupMenuEvents() {
         });
     });
 
-    // Handle Gamemode Toggle Layout Coloring Styles
+    // Gamemode Selection Controllers
     const btnCreative = document.getElementById('modeCreative');
     const btnSurvival = document.getElementById('modeSurvival');
 
@@ -121,14 +136,14 @@ function setupMenuEvents() {
         });
     }
 
-    // World Slot Triggers (Forces Flat Worlds)
+    // World Slot Triggers (World 1 & World 2)
     document.querySelectorAll('.world-select').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const worldSlot = e.currentTarget.getAttribute('data-world');
             try { 
                 generateMap(scene, 'flat', worldSlot); 
             } catch (err) { 
-                console.error(err); 
+                console.error("[Jergcraft] Map gen crash on world-select:", err); 
             }
 
             if (hudGamemodeDisplay) {
@@ -139,14 +154,14 @@ function setupMenuEvents() {
         });
     });
 
-    // Custom Generator Trigger (Forces Hilly worlds out of seeds)
-    bindClick('btnCreateWorld', () => {
+    // Custom Seed Generator Trigger ([create] button)
+    safeBindClick('btnCreateWorld', () => {
         const rawSeedValue = seedInput ? seedInput.value : "";
         
         try { 
             generateMap(scene, 'hills', rawSeedValue); 
         } catch (err) { 
-            console.error(err); 
+            console.error("[Jergcraft] Map gen crash on btnCreateWorld:", err); 
         }
 
         if (hudGamemodeDisplay) {
@@ -163,6 +178,7 @@ function setupMenuEvents() {
         if (canvas) canvas.requestPointerLock(); 
     }
 
+    // Skin Customization
     document.querySelectorAll('.skin-select').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const skinName = e.currentTarget.getAttribute('data-skin');
@@ -174,7 +190,7 @@ function setupMenuEvents() {
         });
     });
 
-    bindClick('btnCustomSkin', () => {
+    safeBindClick('btnCustomSkin', () => {
         const url = prompt("Enter skin URL:", "https://i.imgur.com/yourImage.png");
         if (url && player && typeof player.setSkin === 'function') {
             player.setSkin('custom', url);
@@ -183,11 +199,12 @@ function setupMenuEvents() {
         }
     });
 
-    bindClick('btnResume', () => {
+    // Esc Menu Resumes
+    safeBindClick('btnResume', () => {
         if (canvas) canvas.requestPointerLock();
     });
 
-    bindClick('btnQuit', () => {
+    safeBindClick('btnQuit', () => {
         gameRunning = false;
         if (document.pointerLockElement === canvas) document.exitPointerLock();
         if (escMenu) escMenu.classList.add('hidden');
@@ -223,4 +240,5 @@ function animate() {
     if (renderer && scene && camera) renderer.render(scene, camera);
 }
 
+// Kickstart engine core execution window
 init();
