@@ -1,16 +1,6 @@
 import * as THREE from 'three';
-
-// Safe module imports to prevent script failures if files are missing
-let generateMap, Player;
-try {
-    const mapMod = await import('../Map/mapGenerator.js');
-    generateMap = mapMod.generateMap;
-} catch(e) { console.error("Could not load mapGenerator.js", e); }
-
-try {
-    const playerMod = await import('./player.js');
-    Player = playerMod.Player;
-} catch(e) { console.error("Could not load player.js", e); }
+import { generateMap } from '../Map/mapGenerator.js';
+import { Player } from './player.js';
 
 let scene, camera, renderer, player;
 let gameRunning = false;
@@ -18,16 +8,14 @@ const canvas = document.getElementById('gameCanvas');
 const clock = new THREE.Clock();
 
 function init() {
-    // 1. Core Three.js Scene Setup
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x87CEEB); // Classic Sky Blue
+    scene.background = new THREE.Color(0x87CEEB); 
 
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     
     renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
 
-    // 2. Scene Light Illumination
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambientLight);
 
@@ -35,12 +23,12 @@ function init() {
     dirLight.position.set(12, 24, 8);
     scene.add(dirLight);
 
-    // 3. Spawning Player Safely
-    if (Player) {
-        try { player = new Player(scene, camera); } catch(e) { console.error(e); }
+    try { 
+        player = new Player(scene, camera); 
+    } catch(e) { 
+        console.error("Player initialization error:", e); 
     }
 
-    // 4. Input and Interactivity Systems Initialization
     setupMenuEvents();
     setupPointerLock();
 
@@ -80,7 +68,6 @@ function setupMenuEvents() {
     const seedInput = document.getElementById('worldSeed');
     const hudGamemodeDisplay = document.getElementById('hudGamemodeDisplay');
 
-    // Default configuration metrics for the setup engine console
     let selectedGamemode = 'creative';
 
     const bindClick = (id, callback) => {
@@ -88,7 +75,6 @@ function setupMenuEvents() {
         if (el) el.addEventListener('click', callback);
     };
 
-    // Main Navigation Interactivity Routes
     bindClick('btnWorlds', () => {
         mainMenu.classList.add('hidden');
         worldsMenu.classList.remove('hidden');
@@ -107,59 +93,66 @@ function setupMenuEvents() {
         });
     });
 
-    // Gamemode Selection Selector UI Switches
+    // Handle Gamemode Toggle Layout Coloring Styles
     const btnCreative = document.getElementById('modeCreative');
     const btnSurvival = document.getElementById('modeSurvival');
 
     if (btnCreative && btnSurvival) {
         btnCreative.addEventListener('click', () => {
             selectedGamemode = 'creative';
+            btnCreative.style.backgroundColor = "#4caf50";
+            btnCreative.style.color = "black";
             btnCreative.style.opacity = "1";
-            btnCreative.style.filter = "none";
+            
+            btnSurvival.style.backgroundColor = "#333";
+            btnSurvival.style.color = "white";
             btnSurvival.style.opacity = "0.5";
-            btnSurvival.style.filter = "grayscale(1)";
         });
 
         btnSurvival.addEventListener('click', () => {
             selectedGamemode = 'survival';
+            btnSurvival.style.backgroundColor = "#f44336";
+            btnSurvival.style.color = "white";
             btnSurvival.style.opacity = "1";
-            btnSurvival.style.filter = "none";
+            
+            btnCreative.style.backgroundColor = "#333";
+            btnCreative.style.color = "white";
             btnCreative.style.opacity = "0.5";
-            btnCreative.style.filter = "grayscale(1)";
         });
     }
 
-    // Launch Core Hook: Pre-saved World slots 1 and 2
+    // World Slot Triggers (Forces Flat Worlds)
     document.querySelectorAll('.world-select').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const worldSlot = e.currentTarget.getAttribute('data-world');
-            
-            // Fires static flat maps default assignments for slot indices
-            if (generateMap) {
-                try { generateMap(scene, 'flat', worldSlot); } catch (err) { console.error(err); }
+            try { 
+                generateMap(scene, 'flat', worldSlot); 
+            } catch (err) { 
+                console.error(err); 
             }
 
-            if (hudGamemodeDisplay) hudGamemodeDisplay.innerText = "CREATIVE MODE";
-            
+            if (hudGamemodeDisplay) {
+                hudGamemodeDisplay.innerText = "CREATIVE MODE";
+                hudGamemodeDisplay.style.backgroundColor = '#4caf50';
+            }
             launchGame();
         });
     });
 
-    // Launch Core Hook: Procedural generation console executor block
+    // Custom Generator Trigger (Forces Hilly worlds out of seeds)
     bindClick('btnCreateWorld', () => {
         const rawSeedValue = seedInput ? seedInput.value : "";
         
-        // Dynamically processes seed calculations inside custom noise math
-        if (generateMap) {
-            try { generateMap(scene, 'hills', rawSeedValue); } catch (err) { console.error(err); }
+        try { 
+            generateMap(scene, 'hills', rawSeedValue); 
+        } catch (err) { 
+            console.error(err); 
         }
 
-        // Adjust in-game display overlay trackers
         if (hudGamemodeDisplay) {
             hudGamemodeDisplay.innerText = `${selectedGamemode} mode`;
             hudGamemodeDisplay.style.backgroundColor = selectedGamemode === 'survival' ? '#f44336' : '#4caf50';
         }
-
         launchGame();
     });
 
@@ -170,7 +163,6 @@ function setupMenuEvents() {
         if (canvas) canvas.requestPointerLock(); 
     }
 
-    // Skin Assignment System Interface
     document.querySelectorAll('.skin-select').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const skinName = e.currentTarget.getAttribute('data-skin');
@@ -191,7 +183,6 @@ function setupMenuEvents() {
         }
     });
 
-    // Pause Escape Overlay Control Maps
     bindClick('btnResume', () => {
         if (canvas) canvas.requestPointerLock();
     });
@@ -232,5 +223,4 @@ function animate() {
     if (renderer && scene && camera) renderer.render(scene, camera);
 }
 
-// Initial engine configuration sequence activation
 init();
