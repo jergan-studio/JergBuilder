@@ -54,8 +54,8 @@
                 <div style="display: flex; flex-direction: column; gap: 8px;">
                     <span style="font-size: 0.85rem; color: #888;">Mode:</span>
                     <div style="display: flex; gap: 10px;">
-                        <button id="modeCreative" class="mode-toggle active-mode" style="flex: 1; padding: 10px; font-size: 0.95rem;">Creative</button>
-                        <button id="modeSurvival" class="mode-toggle" style="flex: 1; padding: 10px; font-size: 0.95rem; opacity: 0.5; filter: grayscale(1);">Survival</button>
+                        <button id="modeCreative" type="button" class="mode-toggle" style="flex: 1; padding: 10px; font-size: 0.95rem; background-color: #4caf50; color: black;">Creative</button>
+                        <button id="modeSurvival" type="button" class="mode-toggle" style="flex: 1; padding: 10px; font-size: 0.95rem; background-color: #333; color: white; opacity: 0.5;">Survival</button>
                     </div>
                 </div>
 
@@ -88,14 +88,4 @@
         <div id="ui">
             Click window to look | WASD to Move | Press SPACE to Jump | Press ESC to pause
             <br><br>
-            <span id="hudGamemodeDisplay" style="background: #4caf50; color: black; padding: 2px 6px; font-weight: bold; margin-right: 10px; text-transform: uppercase;">CREATIVE MODE</span>
-            <label for="blockColor" style="vertical-align: middle;">Block Color: </label>
-            <input type="color" id="blockColor" value="#557a2b" style="vertical-align: middle; cursor: pointer;">
-        </div>
-    </div>
-
-    <canvas id="gameCanvas"></canvas>
-
-    <script type="module" defer src="./Js/main.js"></script>
-</body>
-</html>
+            <span id="hudGamem
