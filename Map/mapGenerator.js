@@ -1,117 +1,79 @@
 import * as THREE from 'three';
 
-let currentWorldMesh = null;
-
-function cyrb128(str) {
-    let h1 = 1779033703, h2 = 3024738484, h3 = 3362625948, h4 = 502494843;
-    for (let i = 0, k; i < str.length; i++) {
-        k = str.charCodeAt(i);
-        h1 = h2 ^ Math.imul(h1 ^ k, 597399067);
-        h2 = h3 ^ Math.imul(h2 ^ k, 2869860233);
-        h3 = h4 ^ Math.imul(h3 ^ k, 951274213);
-        h4 = h1 ^ Math.imul(h4 ^ k, 2716044179);
-    }
-    h1 = Math.imul(h3 ^ (h1 >>> 18), 597399067);
-    h2 = Math.imul(h4 ^ (h2 >>> 22), 2869860233);
-    h3 = Math.imul(h1 ^ (h3 >>> 17), 951274213);
-    h4 = Math.imul(h2 ^ (h4 >>> 19), 2716044179);
-    return [(h1^h2^h3^h4)>>>0, (h2^h1)>>>0, (h3^h1)>>>0, (h4^h1)>>>0];
-}
-
-function pseudoRandom(seedNum) {
-    let a = seedNum ^ 0xDEADBEEF;
-    a = (a ^ (a >>> 16)) * 0x21f0aaad;
-    a = (a ^ (a >>> 15)) * 0x735a2d97;
-    a = a ^ (a >>> 15);
-    return (a >>> 0) / 4294967296;
-}
-
-export function generateMap(scene, worldType, rawSeed = "") {
-    if (currentWorldMesh) {
-        scene.remove(currentWorldMesh);
-        if (currentWorldMesh.geometry) currentWorldMesh.geometry.dispose();
-        if (currentWorldMesh.material) currentWorldMesh.material.dispose();
-        currentWorldMesh = null;
-    }
-
-    let seedValue = rawSeed.trim();
-    if (seedValue === "") {
-        seedValue = Math.random().toString();
+/**
+ * Simple pseudo-random hash generator for seed parsing
+ * @param {string} seedStr 
+ * @returns {function} A seeded random number generator function
+ */
+function createRandomFromSeed(seedStr) {
+    let hash = 0;
+    if (seedStr.length === 0) return Math.random;
+    
+    for (let i = 0; i < seedStr.length; i++) {
+        const char = seedStr.charCodeAt(i);
+        hash = (hash << 5) - hash + char;
+        hash |= 0; // Convert to 32bit integer
     }
     
-    const seedHashParts = cyrb128(seedValue);
-    const deterministicOffset = pseudoRandom(seedHashParts[0]) * 100;
+    return function() {
+        const x = Math.sin(hash++) * 10000;
+        return x - Math.floor(x);
+    };
+}
 
-    const gridSizeX = 32;
-    const gridSizeZ = 32;
-    const blocksArray = [];
-
-    for (let x = 0; x < gridSizeX; x++) {
-        for (let z = 0; z < gridSizeZ; z++) {
-            let height = 1; 
-
-            if (worldType === 'hills') {
-                height = Math.floor(
-                    Math.sin((x + deterministicOffset) * 0.15) * 3 + 
-                    Math.cos((z + deterministicOffset) * 0.15) * 3 + 5
-                );
-                if (height < 1) height = 1;
-            }
-
-            for (let y = 0; y < height; y++) {
-                let colorHex = 0x557a2b; 
-
-                if (worldType === 'hills') {
-                    if (y === height - 1 && y > 5) {
-                        colorHex = 0xffffff; 
-                    } else if (y < height - 1 && y > 2) {
-                        colorHex = 0x8b5a2b; 
-                    } else if (y <= 2) {
-                        colorHex = 0x708090; 
-                    }
-                } else {
-                    if (y < height - 1) {
-                        colorHex = 0x8b5a2b; 
-                    }
-                }
-
-                blocksArray.push({
-                    x: x - gridSizeX / 2, 
-                    y: y,
-                    z: z - gridSizeZ / 2,
-                    color: new THREE.Color(colorHex)
-                });
-            }
+/**
+ * Generates the map grid environment for JergBuilder
+ * @param {THREE.Scene} scene The active game scene
+ * @param {string} mode 'flat' or 'hills'
+ * @param {string} seed The world generation seed string
+ */
+export function generateMap(scene, mode = 'flat', seed = '') {
+    // Clear out any old procedural meshes from the scene first
+    const meshesToRemove = [];
+    scene.traverse((child) => {
+        if (child.isMesh && child !== scene.userData.playerMesh) {
+            meshesToRemove.push(child);
         }
-    }
+    });
+    meshesToRemove.forEach(mesh => scene.remove(mesh));
+
+    // Initialize our texture loader and pixelated grass texture
+    const textureLoader = new THREE.TextureLoader();
+    const grassTexture = textureLoader.load('https://github.com/jergan-studio/JergBuilder/blob/main/Assets/Grass.png?raw=true');
+    
+    // Set texturing properties to keep your pixel art sharp
+    grassTexture.magFilter = THREE.NearestFilter;
+    grassTexture.minFilter = THREE.NearestFilter;
+    grassTexture.wrapS = THREE.RepeatWrapping;
+    grassTexture.wrapT = THREE.RepeatWrapping;
 
     const blockGeometry = new THREE.BoxGeometry(1, 1, 1);
-    const blockMaterial = new THREE.MeshLambertMaterial({ vertexColors: true });
+    const blockMaterial = new THREE.MeshLambertMaterial({ map: grassTexture });
 
-    const instancedMesh = new THREE.InstancedMesh(
-        blockGeometry,
-        blockMaterial,
-        blocksArray.length
-    );
+    const worldSize = 32; // Size of the generation grid box
+    const seededRandom = createRandomFromSeed(seed);
 
-    const tempObject = new THREE.Object3D();
+    // Grid Generation Loop
+    for (let x = -worldSize / 2; x < worldSize / 2; x++) {
+        for (let z = -worldSize / 2; z < worldSize / 2; z++) {
+            let height = 1; // Default flat baseline height
 
-    blocksArray.forEach((block, index) => {
-        tempObject.position.set(block.x, block.y, block.z);
-        tempObject.updateMatrix();
-        
-        instancedMesh.setMatrixAt(index, tempObject.matrix);
-        instancedMesh.setColorAt(index, block.color);
-    });
+            if (mode === 'hills') {
+                // Generate simple undulating hill formulas based on coordinates and our custom seed hash multiplier
+                const frequency1 = 0.1;
+                const frequency2 = 0.05;
+                const seedOffset = seededRandom() * 100;
 
-    instancedMesh.instanceMatrix.needsUpdate = true;
-    if (instancedMesh.instanceColor) instancedMesh.instanceColor.needsUpdate = true;
+                const baseNoise = Math.sin((x + seedOffset) * frequency1) * Math.cos((z + seedOffset) * frequency1);
+                const largeNoise = Math.sin((x + seedOffset) * frequency2) * 3;
+                
+                // Final calculation mapping noise onto clean block increments
+                height = Math.max(1, Math.floor((baseNoise * 2) + largeNoise + 3));
+            }
 
-    instancedMesh.castShadow = true;
-    instancedMesh.receiveShadow = true;
-
-    scene.add(instancedMesh);
-    currentWorldMesh = instancedMesh;
-    
-    console.log(`Generated "${worldType}" world. Seed: "${seedValue}".`);
-}
+            // Build the block stack vertically up to the computed height limit
+            for (let y = 0; y < height; y++) {
+                const blockMesh = new THREE.Mesh(blockGeometry, blockMaterial);
+                
+                // Offset by 0.5 to align blocks cleanly to the integer grid positions
+                blockMesh.position.set(x + 0.5, y + 0.5, z + 0.5);
