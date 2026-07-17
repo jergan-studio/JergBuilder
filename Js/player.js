@@ -27,11 +27,13 @@ export class Player {
         this.setupKeyboardListeners();
         this.setupMouseLook();
 
-        // Pre-load the official JergBuilder grass texture asset
+        // Fix the black texture bug by enabling anonymous CORS access
         this.textureLoader = new THREE.TextureLoader();
+        this.textureLoader.crossOrigin = 'anonymous'; // <-- CRITICAL FIX FOR BLACK BLOCKS
+        
         this.grassTexture = this.textureLoader.load('https://github.com/jergan-studio/JergBuilder/blob/main/Assets/Grass.png?raw=true');
         
-        // Keep the texture crisp and blocky (pixel art style)
+        // Keep the texture crisp and pixelated
         this.grassTexture.magFilter = THREE.NearestFilter;
         this.grassTexture.minFilter = THREE.NearestFilter;
     }
@@ -105,8 +107,8 @@ export class Player {
 
                 const placedGeo = new THREE.BoxGeometry(1, 1, 1);
                 
-                // Use the loaded texture directly for the material
-                const placedMat = new THREE.MeshLambertMaterial({ map: this.grassTexture });
+                // Set placed blocks to a clean, flat tan color hex (0xd7ccc8)
+                const placedMat = new THREE.MeshLambertMaterial({ color: 0xd7ccc8 });
                 const newMesh = new THREE.Mesh(placedGeo, placedMat);
                 
                 newMesh.position.copy(newBlockPos);
@@ -130,44 +132,3 @@ export class Player {
             this.bodyMat.map = null;
             this.bodyMat.color.setHex(0x2222ff); 
             this.bodyMat.needsUpdate = true;
-        } else if (skinType === 'custom' && customUrl) {
-            this.textureLoader.load(customUrl, (texture) => {
-                this.bodyMat.color.setHex(0xffffff); 
-                this.bodyMat.map = texture;
-                this.bodyMat.needsUpdate = true;
-            });
-        }
-    }
-
-    update(delta) {
-        if (!delta) delta = 0.016;
-
-        this.velocity.y -= this.gravity * delta;
-        this.camera.position.y += this.velocity.y * delta;
-
-        if (this.camera.position.y <= 2.0) {
-            this.velocity.y = 0;
-            this.camera.position.y = 2.0;
-            this.isGrounded = true;
-        }
-
-        const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
-        const right = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion);
-        forward.y = 0; right.y = 0;
-        forward.normalize(); right.normalize();
-
-        this.direction.z = Number(this.keys.w) - Number(this.keys.s);
-        this.direction.x = Number(this.keys.d) - Number(this.keys.a);
-        this.direction.normalize();
-
-        if (this.keys.w || this.keys.s) {
-            this.camera.position.addScaledVector(forward, this.direction.z * this.speed * delta);
-        }
-        if (this.keys.a || this.keys.d) {
-            this.camera.position.addScaledVector(right, this.direction.x * this.speed * delta);
-        }
-
-        this.playerGroup.position.copy(this.camera.position);
-        this.playerGroup.position.y -= 1.1; 
-    }
-}
