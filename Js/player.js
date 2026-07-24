@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 export class Player {
     constructor(scene, camera) {
@@ -14,10 +15,10 @@ export class Player {
         this.isGrounded = true;
 
         this.playerGroup = new THREE.Group();
-        this.createPlayerMesh();
         this.scene.add(this.playerGroup);
 
-        this.camera.position.set(0, 2, 0);
+        // STICKING TO FIRST PERSON LOOK: Lock camera at eye height level
+        this.camera.position.set(0, 1.8, 0);
         this.camera.rotation.set(0, 0, 0);
         this.pitchEuler.setFromQuaternion(this.camera.quaternion);
         
@@ -27,23 +28,37 @@ export class Player {
         this.setupKeyboardListeners();
         this.setupMouseLook();
 
-        // Fix the black texture bug by enabling anonymous CORS access
-        this.textureLoader = new THREE.TextureLoader();
-        this.textureLoader.crossOrigin = 'anonymous'; // <-- CRITICAL FIX FOR BLACK BLOCKS
-        
-        this.grassTexture = this.textureLoader.load('https://github.com/jergan-studio/JergBuilder/blob/main/Assets/Grass.png?raw=true');
-        
-        // Keep the texture crisp and pixelated
-        this.grassTexture.magFilter = THREE.NearestFilter;
-        this.grassTexture.minFilter = THREE.NearestFilter;
+        // Load the custom 3D model asset directly via GLTFLoader
+        this.loadCustomGLBModel();
     }
 
-    createPlayerMesh() {
-        const bodyGeo = new THREE.BoxGeometry(0.6, 1.8, 0.6);
-        this.bodyMat = new THREE.MeshLambertMaterial({ color: 0x555555 }); 
-        this.mesh = new THREE.Mesh(bodyGeo, this.bodyMat);
-        this.mesh.position.y = 0.9;
-        this.playerGroup.add(this.mesh);
+    loadCustomGLBModel() {
+        const loader = new GLTFLoader();
+        // Pointing to your official jergplr asset path
+        loader.load('https://github.com/jergan-studio/JergBuilder/blob/main/Assets/jergplr.glb?raw=true', 
+            (gltf) => {
+                this.customMesh = gltf.scene;
+                
+                // Scale the custom model down to player human dimensions if necessary
+                this.customMesh.scale.set(1, 1, 1);
+                
+                // Sit model directly underneath camera position coordinates
+                this.customMesh.position.set(0, -1.8, 0);
+                
+                this.playerGroup.add(this.customMesh);
+                console.log("JergBuilder custom player glb model loaded successfully.");
+            },
+            undefined,
+            (error) => {
+                console.warn("Failed to retrieve custom .glb asset profile, defaulting to backup box bounds:", error);
+                // Fallback box bounds in case network loading is interrupted
+                const fallbackGeo = new THREE.BoxGeometry(0.6, 1.8, 0.6);
+                const fallbackMat = new THREE.MeshLambertMaterial({ color: 0x555555 });
+                this.customMesh = new THREE.Mesh(fallbackGeo, fallbackMat);
+                this.customMesh.position.y = -0.9;
+                this.playerGroup.add(this.customMesh);
+            }
+        );
     }
 
     setupKeyboardListeners() {
@@ -69,7 +84,14 @@ export class Player {
                 this.pitchEuler.y -= e.movementX * 0.0025;
                 this.pitchEuler.x -= e.movementY * 0.0025;
                 this.pitchEuler.x = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, this.pitchEuler.x));
+                
+                // Rotates looking frame of reference natively
                 this.camera.quaternion.setFromEuler(this.pitchEuler);
+                
+                // Rotate the player model's body horizontally to match the look vector
+                if (this.customMesh) {
+                    this.customMesh.rotation.y = this.pitchEuler.y;
+                }
             }
         });
 
@@ -106,9 +128,7 @@ export class Player {
                     .addScalar(0.5); 
 
                 const placedGeo = new THREE.BoxGeometry(1, 1, 1);
-                
-                // Set placed blocks to a clean, flat tan color hex (0xd7ccc8)
-                const placedMat = new THREE.MeshLambertMaterial({ color: 0xd7ccc8 });
+                const placedMat = new THREE.MeshLambertMaterial({ color: 0xd7ccc8 }); // Clean Tan Color Block Node
                 const newMesh = new THREE.Mesh(placedGeo, placedMat);
                 
                 newMesh.position.copy(newBlockPos);
@@ -117,18 +137,36 @@ export class Player {
         }
     }
 
-    setSkin(skinType, customUrl = null) {
-        if (!this.bodyMat) return;
+    update(delta) {
+        if (!delta) delta = 0.016;
 
-        if (skinType === 'default') {
-            this.bodyMat.map = null;
-            this.bodyMat.color.setHex(0x555555); 
-            this.bodyMat.needsUpdate = true;
-        } else if (skinType === 'red') {
-            this.bodyMat.map = null;
-            this.bodyMat.color.setHex(0xff2222); 
-            this.bodyMat.needsUpdate = true;
-        } else if (skinType === 'blue') {
-            this.bodyMat.map = null;
-            this.bodyMat.color.setHex(0x2222ff); 
-            this.bodyMat.needsUpdate = true;
+        this.velocity.y -= this.gravity * delta;
+        this.camera.position.y += this.velocity.y * delta;
+
+        // Keep player standing perfectly on the map floor layer plane
+        if (this.camera.position.y <= 1.8) {
+            this.velocity.y = 0;
+            this.camera.position.y = 1.8;
+            this.isGrounded = true;
+        }
+
+        const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
+        const right = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion);
+        forward.y = 0; right.y = 0;
+        forward.normalize(); right.normalize();
+
+        this.direction.z = Number(this.keys.w) - Number(this.keys.s);
+        this.direction.x = Number(this.keys.d) - Number(this.keys.a);
+        this.direction.normalize();
+
+        if (this.keys.w || this.keys.s) {
+            this.camera.position.addScaledVector(forward, this.direction.z * this.speed * delta);
+        }
+        if (this.keys.a || this.keys.d) {
+            this.camera.position.addScaledVector(right, this.direction.x * this.speed * delta);
+        }
+
+        // Keep player body group locked perfectly matching camera position updates
+        this.playerGroup.position.copy(this.camera.position);
+    }
+}
