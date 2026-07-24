@@ -5,11 +5,12 @@ let Player = null;
 
 let scene, camera, renderer, player;
 let gameRunning = false;
+let mobileModeEnabled = false;
 
 const canvas = document.getElementById('gameCanvas');
 const clock = new THREE.Clock();
 
-// Safely load dynamic modules in the background without blocking UI initialization
+// --- 1. MODULE LOADING ---
 async function safelyLoadModules() {
     try {
         const mapMod = await import('../Map/mapGenerator.js');
@@ -26,14 +27,20 @@ async function safelyLoadModules() {
     }
 }
 
-async function init() {
-    // 1. Initialize UI events immediately
+// --- 2. INITIALIZATION ---
+function init() {
+    // Auto-detect touch screen / mobile devices
+    if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+        mobileModeEnabled = true;
+    }
+
+    // Attach menu click listeners IMMEDIATELY before dynamic modules load
     setupMenuEvents();
 
-    // 2. Load background modules
-    await safelyLoadModules();
+    // Load dynamic Three.js modules in background
+    safelyLoadModules();
 
-    // 3. Setup Three.js Scene
+    // Setup Three.js scene
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0xa5d6a7); 
 
@@ -52,123 +59,154 @@ async function init() {
     scene.add(dirLight);
 
     setupPointerLock();
-
     window.addEventListener('resize', onWindowResize);
     animate();
 }
 
+// --- 3. DISPLAY HELPER FUNCTIONS ---
+function hideMenu(id) {
+    const el = document.getElementById(id);
+    if (el) {
+        el.classList.add('hidden');
+        el.style.display = 'none';
+    }
+}
+
+function showMenu(id) {
+    const el = document.getElementById(id);
+    if (el) {
+        el.classList.remove('hidden');
+        // Standard overlays use flex, controls use block
+        el.style.display = (id === 'hud' || id === 'mobileTouchControls') ? 'block' : 'flex';
+    }
+}
+
+function hideAllMenus() {
+    ['mainMenu', 'worldsMenu', 'skinsMenu', 'settingsMenu', 'escMenu'].forEach(id => hideMenu(id));
+}
+
+// --- 4. POINTER LOCK SETUP (PC ONLY) ---
 function setupPointerLock() {
     if (!canvas) return;
 
     canvas.addEventListener('click', () => {
-        if (gameRunning) {
+        if (gameRunning && !mobileModeEnabled) {
             canvas.requestPointerLock();
         }
     });
 
     document.addEventListener('pointerlockchange', () => {
-        const escMenu = document.getElementById('escMenu');
-        const hud = document.getElementById('hud');
+        if (mobileModeEnabled) return;
 
         if (document.pointerLockElement === canvas) {
-            if (escMenu) escMenu.classList.add('hidden');
-            if (hud) hud.classList.remove('hidden');
+            hideMenu('escMenu');
+            showMenu('hud');
             gameRunning = true;
         } else {
             if (gameRunning) {
-                if (escMenu) escMenu.classList.remove('hidden');
-                if (hud) hud.classList.add('hidden');
+                showMenu('escMenu');
+                hideMenu('hud');
             }
         }
     });
 }
 
+// --- 5. EVENT LISTENERS & MENU NAVIGATION ---
 function setupMenuEvents() {
     let selectedGamemode = 'creative';
 
-    const hideAllMenus = () => {
-        ['mainMenu', 'worldsMenu', 'skinsMenu', 'settingsMenu', 'escMenu'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.classList.add('hidden');
-        });
-    };
+    const btnToggleMobile = document.getElementById('btnToggleMobile');
+    if (btnToggleMobile) {
+        btnToggleMobile.innerText = mobileModeEnabled ? "Mobile Controls: ON" : "Mobile Controls: OFF";
+        btnToggleMobile.style.backgroundColor = mobileModeEnabled ? "#81c784" : "#333";
+        btnToggleMobile.style.color = mobileModeEnabled ? "#1c1d31" : "#fff";
+    }
 
-    const showMenu = (id) => {
-        hideAllMenus();
-        const el = document.getElementById(id);
-        if (el) el.classList.remove('hidden');
-    };
-
-    // Event Delegation to handle all button clicks safely
-    document.body.addEventListener('click', (e) => {
+    // Global click listener to avoid missing dynamic elements or bubbling bugs
+    window.addEventListener('click', (e) => {
         const btn = e.target.closest('button');
         if (!btn) return;
 
         const id = btn.id;
         const action = btn.getAttribute('data-action');
 
-        // --- OPEN WORLDS MENU ---
-        if (id === 'btnWorlds' || action === 'open-worlds') {
+        // OPEN WORLDS MENU
+        if (id === 'btnWorlds' || action === 'open-worlds' || btn.innerText.includes('Explore Worlds')) {
             e.preventDefault();
+            hideAllMenus();
             showMenu('worldsMenu');
             return;
         }
 
-        // --- OPEN SKINS MENU ---
-        if (id === 'btnSkins' || action === 'open-skins') {
+        // OPEN SKINS MENU
+        if (id === 'btnSkins' || action === 'open-skins' || btn.innerText.includes('Dress Up Skin')) {
             e.preventDefault();
+            hideAllMenus();
             showMenu('skinsMenu');
             return;
         }
 
-        // --- OPEN SETTINGS MENU ---
-        if (id === 'btnSettingsMenu' || action === 'open-settings') {
+        // OPEN SETTINGS MENU
+        if (id === 'btnSettingsMenu' || action === 'open-settings' || btn.innerText.includes('Settings')) {
             e.preventDefault();
+            hideAllMenus();
             showMenu('settingsMenu');
             return;
         }
 
-        // --- BACK TO MAIN MENU ---
-        if (btn.classList.contains('btnBack') || action === 'go-back') {
+        // BACK TO MAIN MENU
+        if (btn.classList.contains('btnBack') || action === 'go-back' || btn.innerText.includes('Back')) {
             e.preventDefault();
+            hideAllMenus();
             showMenu('mainMenu');
             return;
         }
 
-        // --- MODE TOGGLES ---
+        // TOGGLE MOBILE CONTROLS
+        if (id === 'btnToggleMobile' || action === 'toggle-mobile') {
+            e.preventDefault();
+            mobileModeEnabled = !mobileModeEnabled;
+            btn.innerText = mobileModeEnabled ? "Mobile Controls: ON" : "Mobile Controls: OFF";
+            btn.style.backgroundColor = mobileModeEnabled ? "#81c784" : "#333";
+            btn.style.color = mobileModeEnabled ? "#1c1d31" : "#fff";
+            return;
+        }
+
+        // SELECT CREATIVE MODE
         if (id === 'modeCreative' || action === 'mode-creative') {
             e.preventDefault();
             selectedGamemode = 'creative';
             const creativeBtn = document.getElementById('modeCreative');
             const survivalBtn = document.getElementById('modeSurvival');
-            if (creativeBtn) { creativeBtn.style.backgroundColor = "#4caf50"; creativeBtn.style.color = "black"; creativeBtn.style.opacity = "1"; }
-            if (survivalBtn) { survivalBtn.style.backgroundColor = "#333"; survivalBtn.style.opacity = "0.5"; survivalBtn.style.color = "white"; }
+            if (creativeBtn) { creativeBtn.style.backgroundColor = "#81c784"; creativeBtn.style.color = "#1c1d31"; creativeBtn.style.opacity = "1"; }
+            if (survivalBtn) { survivalBtn.style.backgroundColor = "#333"; survivalBtn.style.opacity = "0.5"; survivalBtn.style.color = "#fff"; }
             return;
         }
 
+        // SELECT SURVIVAL MODE
         if (id === 'modeSurvival' || action === 'mode-survival') {
             e.preventDefault();
             selectedGamemode = 'survival';
             const creativeBtn = document.getElementById('modeCreative');
             const survivalBtn = document.getElementById('modeSurvival');
-            if (survivalBtn) { survivalBtn.style.backgroundColor = "#f44336"; survivalBtn.style.color = "white"; survivalBtn.style.opacity = "1"; }
-            if (creativeBtn) { creativeBtn.style.backgroundColor = "#333"; creativeBtn.style.opacity = "0.5"; creativeBtn.style.color = "white"; }
+            if (survivalBtn) { survivalBtn.style.backgroundColor = "#f44336"; survivalBtn.style.color = "#ffffff"; survivalBtn.style.opacity = "1"; }
+            if (creativeBtn) { creativeBtn.style.backgroundColor = "#333"; creativeBtn.style.opacity = "0.5"; creativeBtn.style.color = "#fff"; }
             return;
         }
 
-        // --- SELECT PRESET WORLD ---
+        // LAUNCH PRESET WORLD
         if (btn.classList.contains('world-select') || action === 'select-world') {
             e.preventDefault();
             const worldSlot = btn.getAttribute('data-world') || 'world1';
             if (generateMap) {
                 try { generateMap(scene, 'flat', worldSlot); } catch (err) { console.error(err); }
             }
-            updateHud("CREATIVE MODE", '#4caf50');
+            updateHud("CREATIVE MODE", '#81c784');
             launchGame();
             return;
         }
 
-        // --- CREATE WORLD ---
+        // CREATE NEW WORLD
         if (id === 'btnCreateWorld' || action === 'create-world') {
             e.preventDefault();
             const seedInput = document.getElementById('worldSeed');
@@ -176,29 +214,42 @@ function setupMenuEvents() {
             if (generateMap) {
                 try { generateMap(scene, 'hills', rawSeedValue); } catch (err) { console.error(err); }
             }
-            updateHud(`${selectedGamemode.toUpperCase()} MODE`, selectedGamemode === 'survival' ? '#f44336' : '#4caf50');
+            updateHud(`${selectedGamemode.toUpperCase()} MODE`, selectedGamemode === 'survival' ? '#f44336' : '#81c784');
             launchGame();
             return;
         }
 
-        // --- PAUSE MENU ACTIONS ---
+        // OPEN PAUSE MENU (MOBILE BUTTON)
+        if (action === 'open-pause' || id === 'btnMobilePause') {
+            e.preventDefault();
+            gameRunning = false;
+            hideMenu('mobileTouchControls');
+            showMenu('escMenu');
+            return;
+        }
+
+        // RESUME GAME
         if (id === 'btnResume' || action === 'resume-game') {
             e.preventDefault();
             hideAllMenus();
-            const hud = document.getElementById('hud');
-            if (hud) hud.classList.remove('hidden');
-            if (canvas) canvas.requestPointerLock();
+            showMenu('hud');
+            if (mobileModeEnabled) {
+                showMenu('mobileTouchControls');
+            } else if (canvas) {
+                canvas.requestPointerLock();
+            }
             gameRunning = true;
             return;
         }
 
+        // QUIT TO MAIN MENU
         if (id === 'btnQuit' || action === 'quit-game') {
             e.preventDefault();
             gameRunning = false;
             if (document.pointerLockElement === canvas) document.exitPointerLock();
             hideAllMenus();
-            const hud = document.getElementById('hud');
-            if (hud) hud.classList.add('hidden');
+            hideMenu('hud');
+            hideMenu('mobileTouchControls');
             showMenu('mainMenu');
             return;
         }
@@ -214,8 +265,13 @@ function setupMenuEvents() {
 
     function launchGame() {
         hideAllMenus();
-        const hud = document.getElementById('hud');
-        if (hud) hud.classList.remove('hidden');
+        showMenu('hud');
+
+        if (mobileModeEnabled) {
+            showMenu('mobileTouchControls');
+        } else {
+            hideMenu('mobileTouchControls');
+        }
 
         if (Player) {
             try { 
@@ -226,10 +282,11 @@ function setupMenuEvents() {
         }
 
         gameRunning = true; 
-        if (canvas) canvas.requestPointerLock(); 
+        if (!mobileModeEnabled && canvas) canvas.requestPointerLock(); 
     }
 }
 
+// --- 6. RENDER & RESIZE LOOPS ---
 function onWindowResize() {
     if (!camera || !renderer) return;
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -248,9 +305,9 @@ function animate() {
     if (renderer && scene && camera) renderer.render(scene, camera);
 }
 
-// Start immediately on DOM Ready
+// Safe bootstrap check
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => init());
+    document.addEventListener('DOMContentLoaded', init);
 } else {
     init();
 }
