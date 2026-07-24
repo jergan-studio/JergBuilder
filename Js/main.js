@@ -38,10 +38,10 @@ async function init() {
         renderer.setSize(window.innerWidth, window.innerHeight);
     }
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
     scene.add(ambientLight);
 
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.7);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
     dirLight.position.set(10, 20, 10);
     scene.add(dirLight);
 
@@ -67,12 +67,12 @@ function setupPointerLock() {
         if (currentProfile !== 'desktop') return;
         
         if (document.pointerLockElement === canvas) {
-            if (escMenu) { escMenu.classList.add('hidden'); escMenu.style.display = 'none'; }
+            if (escMenu) escMenu.classList.add('hidden');
             if (hud) hud.classList.remove('hidden');
             gameRunning = true;
         } else {
             if (gameRunning) {
-                if (escMenu) { escMenu.classList.remove('hidden'); escMenu.style.display = 'flex'; }
+                if (escMenu) escMenu.classList.remove('hidden');
                 if (hud) hud.classList.add('hidden');
             }
         }
@@ -95,20 +95,21 @@ function setupMenuEvents() {
         if (el) el.addEventListener('click', callback);
     };
 
+    // FIXED BUTTON CLICKS: Adding/Removing utility classes cleanly
     safeBindClick('btnWorlds', () => {
         if (mainMenu) mainMenu.classList.add('hidden');
-        if (worldsMenu) { worldsMenu.classList.remove('hidden'); worldsMenu.style.setProperty('display', 'flex', 'important'); }
+        if (worldsMenu) worldsMenu.classList.remove('hidden');
     });
 
     safeBindClick('btnSkins', () => {
         if (mainMenu) mainMenu.classList.add('hidden');
-        if (skinsMenu) { skinsMenu.classList.remove('hidden'); skinsMenu.style.setProperty('display', 'flex', 'important'); }
+        if (skinsMenu) skinsMenu.classList.remove('hidden');
     });
 
     document.querySelectorAll('.btnBack').forEach(btn => {
         btn.addEventListener('click', () => {
-            if (worldsMenu) { worldsMenu.classList.add('hidden'); worldsMenu.style.display = 'none'; }
-            if (skinsMenu) { skinsMenu.classList.add('hidden'); skinsMenu.style.display = 'none'; }
+            if (worldsMenu) worldsMenu.classList.add('hidden');
+            if (skinsMenu) skinsMenu.classList.add('hidden');
             if (mainMenu) mainMenu.classList.remove('hidden');
         });
     });
@@ -141,3 +142,69 @@ function setupMenuEvents() {
                 hudGamemodeDisplay.style.backgroundColor = '#4caf50';
             }
             launchGame();
+        });
+    });
+
+    safeBindClick('btnCreateWorld', () => {
+        const rawSeedValue = seedInput ? seedInput.value : "";
+        if (generateMap) {
+            try { generateMap(scene, 'hills', rawSeedValue); } catch (err) { console.error(err); }
+        }
+        if (hudGamemodeDisplay) {
+            hudGamemodeDisplay.innerText = `${selectedGamemode.toUpperCase()} MODE`;
+            hudGamemodeDisplay.style.backgroundColor = selectedGamemode === 'survival' ? '#f44336' : '#4caf50';
+        }
+        launchGame();
+    });
+
+    function launchGame() {
+        if (worldsMenu) worldsMenu.classList.add('hidden');
+        if (hud) hud.classList.remove('hidden');
+
+        if (Player) {
+            try { 
+                player = new Player(scene, camera); 
+            } catch(e) { 
+                console.error("Player initiation exception:", e); 
+            }
+        }
+
+        gameRunning = true; 
+        if (currentProfile === 'desktop' && canvas) canvas.requestPointerLock(); 
+    }
+
+    safeBindClick('btnResume', () => {
+        if (escMenu) escMenu.classList.add('hidden');
+        if (hud) hud.classList.remove('hidden');
+        if (currentProfile === 'desktop' && canvas) canvas.requestPointerLock();
+        gameRunning = true;
+    });
+
+    safeBindClick('btnQuit', () => {
+        gameRunning = false;
+        if (document.pointerLockElement === canvas) document.exitPointerLock();
+        if (escMenu) escMenu.classList.add('hidden');
+        if (hud) hud.classList.add('hidden');
+        if (mainMenu) mainMenu.classList.remove('hidden');
+    });
+}
+
+function onWindowResize() {
+    if (!camera || !renderer) return;
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function animate() {
+    requestAnimationFrame(animate);
+    const delta = clock.getDelta();
+
+    if (gameRunning && player && typeof player.update === 'function') {
+        player.update(delta);
+    }
+    
+    if (renderer && scene && camera) renderer.render(scene, camera);
+}
+
+init();
