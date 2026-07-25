@@ -7,25 +7,25 @@ export class Player {
         this.camera = camera;
         this.worldBlocks = worldBlocks;
 
-        // --- 1. SIZING & SCALE (Size 15) ---
-        this.scale = 15; 
-        this.width = 0.6 * this.scale;     // 9 units wide
-        this.height = 1.8 * this.scale;    // 27 units tall
-        this.eyeHeight = 1.6 * this.scale; // Eye level inside 1st person
+        // --- 1. SMALL SIZING & SCALE (Minecraft Standard Scale = 1) ---
+        this.scale = 1; 
+        this.width = 0.6;     // 0.6 units wide
+        this.height = 1.8;    // 1.8 units tall
+        this.eyeHeight = 1.62; // Standard eye level
 
-        // Spawn position tuned for ground landing
-        this.position = new THREE.Vector3(0, 30, 0);
+        // Spawn position tuned right above the ground
+        this.position = new THREE.Vector3(0, 15, 0);
         this.velocity = new THREE.Vector3();
 
-        // Physics parameters for size 15 scale
-        this.moveSpeed = 25;
-        this.jumpForce = 28;
-        this.gravity = 65;
+        // Standard movement physics
+        this.moveSpeed = 10;
+        this.jumpForce = 12;
+        this.gravity = 32;
         this.isGrounded = false;
 
         // Camera Perspective Mode (false = 1st Person, true = 3rd Person)
         this.isThirdPerson = false;
-        this.thirdPersonDistance = 4.0 * this.scale; // Increased distance to fix mesh clipping
+        this.thirdPersonDistance = 4; // Clean distance behind player
 
         this.keys = { forward: false, backward: false, left: false, right: false, jump: false };
         this.pitch = 0;
@@ -48,7 +48,7 @@ export class Player {
             this.model.scale.set(this.scale, this.scale, this.scale);
             this.scene.add(this.model);
             
-            // Model ONLY visible in 3rd person to prevent inside-mesh clipping
+            // Model ONLY visible in 3rd person to prevent camera clipping
             this.model.visible = this.isThirdPerson;
         }, undefined, (error) => {
             console.warn("Could not load player model glb:", error);
@@ -218,7 +218,7 @@ export class Player {
         this.position.y += this.velocity.y * delta;
         this.checkCollisions('y');
 
-        // Ground floor floor fallback
+        // Fallback ground floor
         if (this.position.y <= 1) {
             this.position.y = 1;
             this.velocity.y = 0;
@@ -229,7 +229,7 @@ export class Player {
         if (this.model) {
             this.model.position.copy(this.position);
             this.model.rotation.y = this.yaw;
-            this.model.visible = this.isThirdPerson; // Hide model in 1st person
+            this.model.visible = this.isThirdPerson;
         }
 
         // --- 5. CAMERA UPDATE ---
