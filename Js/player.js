@@ -13,11 +13,11 @@ export class Player {
         this.height = 1.8 * this.scale;    // 27 units tall
         this.eyeHeight = 1.6 * this.scale; // Eye level inside 1st person
 
-        // Spawn position tuned to land smoothly on ground blocks
+        // Spawn position tuned for ground landing
         this.position = new THREE.Vector3(0, 30, 0);
         this.velocity = new THREE.Vector3();
 
-        // Movement physics tuned for size 15 scale
+        // Physics parameters for size 15 scale
         this.moveSpeed = 25;
         this.jumpForce = 28;
         this.gravity = 65;
@@ -25,7 +25,7 @@ export class Player {
 
         // Camera Perspective Mode (false = 1st Person, true = 3rd Person)
         this.isThirdPerson = false;
-        this.thirdPersonDistance = 2.5 * this.scale; // Distance behind player
+        this.thirdPersonDistance = 4.0 * this.scale; // Increased distance to fix mesh clipping
 
         this.keys = { forward: false, backward: false, left: false, right: false, jump: false };
         this.pitch = 0;
@@ -48,7 +48,7 @@ export class Player {
             this.model.scale.set(this.scale, this.scale, this.scale);
             this.scene.add(this.model);
             
-            // Hidden in 1st person view by default
+            // Model ONLY visible in 3rd person to prevent inside-mesh clipping
             this.model.visible = this.isThirdPerson;
         }, undefined, (error) => {
             console.warn("Could not load player model glb:", error);
@@ -218,7 +218,7 @@ export class Player {
         this.position.y += this.velocity.y * delta;
         this.checkCollisions('y');
 
-        // Fallback ground floor
+        // Ground floor floor fallback
         if (this.position.y <= 1) {
             this.position.y = 1;
             this.velocity.y = 0;
@@ -229,7 +229,7 @@ export class Player {
         if (this.model) {
             this.model.position.copy(this.position);
             this.model.rotation.y = this.yaw;
-            this.model.visible = this.isThirdPerson;
+            this.model.visible = this.isThirdPerson; // Hide model in 1st person
         }
 
         // --- 5. CAMERA UPDATE ---
