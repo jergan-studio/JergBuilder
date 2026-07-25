@@ -11,10 +11,9 @@ export class Player {
         this.scale = 0.5; 
         this.width = 0.6 * this.scale;     // 0.3 units wide
         this.height = 1.8 * this.scale;    // 0.9 units tall
-        this.eyeHeight = 1.6 * this.scale; // 0.8 units eye level
+        this.eyeHeight = 1.6 * this.scale; // 0.8 units eye height
 
-        // Spawn position elevated to avoid spawning inside/below terrain
-        this.position = new THREE.Vector3(0, 30, 0);
+        this.position = new THREE.Vector3(0, 0, 0);
         this.velocity = new THREE.Vector3();
 
         // Physics parameters
@@ -31,16 +30,32 @@ export class Player {
         this.pitch = 0;
         this.yaw = 0;
 
-        // Raycasting setup
+        // Raycasting for block interaction
         this.raycaster = new THREE.Raycaster();
         this.reachDistance = 8; 
 
-        // Player GLTF Model
+        // Player Model
         this.model = null;
         this.loadPlayerModel();
 
         this.boundingBox = new THREE.Box3();
         this.setupControls();
+
+        // Spawn safely on top of terrain
+        this.spawnPlayerAboveGround(0, 0);
+    }
+
+    // Spawns the player on top of the highest block at coordinates (x, z)
+    spawnPlayerAboveGround(x = 0, z = 0) {
+        let highestY = 0;
+        for (let y = 100; y >= -10; y--) {
+            if (this.isBlockAt(x, y, z)) {
+                highestY = y + 1; // Sit right on top of the block
+                break;
+            }
+        }
+        this.position.set(x, highestY + 0.1, z);
+        this.velocity.set(0, 0, 0);
     }
 
     loadPlayerModel() {
@@ -61,7 +76,7 @@ export class Player {
         window.addEventListener('keydown', (e) => {
             this.updateKey(e.code, true);
 
-            // Toggle 3rd Person Camera View with the '[' key
+            // Toggle 3rd Person View with '['
             if (e.code === 'BracketLeft' || e.key === '[') {
                 e.preventDefault();
                 this.isThirdPerson = !this.isThirdPerson;
@@ -92,7 +107,7 @@ export class Player {
         }
     }
 
-    // --- FLEXIBLE BLOCK LOOKUP ---
+    // --- FLEXIBLE MAP BLOCK LOOKUP ---
     isBlockAt(x, y, z) {
         if (!this.worldBlocks) return false;
 
@@ -103,16 +118,12 @@ export class Player {
         const key1 = `${bx},${by},${bz}`;
         const key2 = `${bx}_${by}_${bz}`;
 
-        // Map lookup
         if (this.worldBlocks instanceof Map) {
             return this.worldBlocks.has(key1) || this.worldBlocks.has(key2);
-        } 
-        // Object lookup
-        else if (typeof this.worldBlocks === 'object' && !Array.isArray(this.worldBlocks)) {
+        } else if (typeof this.worldBlocks === 'object' && !Array.isArray(this.worldBlocks)) {
             return !!(this.worldBlocks[key1] || this.worldBlocks[key2]);
         }
 
-        // Array lookup
         if (Array.isArray(this.worldBlocks)) {
             for (let i = 0; i < this.worldBlocks.length; i++) {
                 const b = this.worldBlocks[i];
@@ -128,7 +139,7 @@ export class Player {
         return false;
     }
 
-    // --- RAYCAST FOR BLOCK SELECTION / PLACEMENT ---
+    // --- RAYCAST FOR BLOCK PLACEMENT / DESTROYING ---
     getLookAtBlock(blockObjectsList = []) {
         const headPosition = new THREE.Vector3(
             this.position.x,
@@ -178,12 +189,12 @@ export class Player {
     checkCollisions(axis) {
         this.updateBoundingBox();
 
-        const minX = Math.floor(this.boundingBox.min.x - 0.1);
-        const maxX = Math.floor(this.boundingBox.max.x + 0.1);
-        const minY = Math.floor(this.boundingBox.min.y - 0.1);
-        const maxY = Math.floor(this.boundingBox.max.y + 0.1);
-        const minZ = Math.floor(this.boundingBox.min.z - 0.1);
-        const maxZ = Math.floor(this.boundingBox.max.z + 0.1);
+        const minX = Math.floor(this.boundingBox.min.x);
+        const maxX = Math.floor(this.boundingBox.max.x);
+        const minY = Math.floor(this.boundingBox.min.y);
+        const maxY = Math.floor(this.boundingBox.max.y);
+        const minZ = Math.floor(this.boundingBox.min.z);
+        const maxZ = Math.floor(this.boundingBox.max.z);
 
         const blockBox = new THREE.Box3();
 
@@ -237,7 +248,7 @@ export class Player {
     }
 
     update(delta) {
-        // --- 1. MOVEMENT INPUT ---
+        // --- 1. MOVEMENT ---
         const moveDir = new THREE.Vector3();
         if (this.keys.forward) moveDir.z -= 1;
         if (this.keys.backward) moveDir.z += 1;
@@ -260,7 +271,7 @@ export class Player {
 
         this.velocity.y -= this.gravity * delta;
 
-        // --- 3. AXIS COLLISION RESOLUTION ---
+        // --- 3. SEPARATE AXIS RESOLUTION ---
         this.position.x += this.velocity.x * delta;
         this.checkCollisions('x');
 
@@ -271,10 +282,9 @@ export class Player {
         this.position.y += this.velocity.y * delta;
         this.checkCollisions('y');
 
-        // Floor safety boundary
-        if (this.position.y <= -50) {
-            this.position.set(0, 30, 0); // Respawn if fallen out of world
-            this.velocity.set(0, 0, 0);
+        // Fall out of world safeguard
+        if (this.position.y <= -30) {
+            this.spawnPlayerAboveGround(0, 0);
         }
 
         // --- 4. MODEL SYNC ---
