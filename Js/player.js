@@ -7,25 +7,25 @@ export class Player {
         this.camera = camera;
         this.worldBlocks = worldBlocks;
 
-        // --- 1. SMALL SIZING & SCALE (Minecraft Standard Scale = 1) ---
+        // --- 1. PROPORTIONAL SIZING & SCALE ---
         this.scale = 0.5; 
-        this.width = 0.6;     // 0.6 units wide
-        this.height = 1.8;    // 1.8 units tall
-        this.eyeHeight = 1.62; // Standard eye level
+        this.width = 0.6 * this.scale;     // 0.3 units wide
+        this.height = 1.8 * this.scale;    // 0.9 units tall
+        this.eyeHeight = 1.6 * this.scale; // 0.8 units eye height
 
         // Spawn position tuned right above the ground
-        this.position = new THREE.Vector3(0, 15, 0);
+        this.position = new THREE.Vector3(0, 10, 0);
         this.velocity = new THREE.Vector3();
 
-        // Standard movement physics
-        this.moveSpeed = 10;
-        this.jumpForce = 12;
-        this.gravity = 32;
+        // Balanced movement physics for 0.5 scale
+        this.moveSpeed = 8;
+        this.jumpForce = 10;
+        this.gravity = 28;
         this.isGrounded = false;
 
         // Camera Perspective Mode (false = 1st Person, true = 3rd Person)
         this.isThirdPerson = false;
-        this.thirdPersonDistance = 4; // Clean distance behind player
+        this.thirdPersonDistance = 3 * this.scale + 2; // Scaled offset
 
         this.keys = { forward: false, backward: false, left: false, right: false, jump: false };
         this.pitch = 0;
