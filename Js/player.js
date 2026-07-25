@@ -11,13 +11,12 @@ export class Player {
         this.scale = 0.5; 
         this.width = 0.6 * this.scale;     // 0.3 units wide
         this.height = 1.8 * this.scale;    // 0.9 units tall
-        this.eyeHeight = 1.6 * this.scale; // 0.8 units eye height
+        this.eyeHeight = 1.6 * this.scale; // 0.8 units eye level
 
-        // Spawn position tuned right above the ground
-        this.position = new THREE.Vector3(0, 10, 0);
+        this.position = new THREE.Vector3(0, 15, 0);
         this.velocity = new THREE.Vector3();
 
-        // Balanced movement physics for 0.5 scale
+        // Physics parameters tuned for 0.5 scale
         this.moveSpeed = 8;
         this.jumpForce = 10;
         this.gravity = 28;
@@ -25,11 +24,15 @@ export class Player {
 
         // Camera Perspective Mode (false = 1st Person, true = 3rd Person)
         this.isThirdPerson = false;
-        this.thirdPersonDistance = 3 * this.scale + 2; // Scaled offset
+        this.thirdPersonDistance = 3 * this.scale + 2;
 
         this.keys = { forward: false, backward: false, left: false, right: false, jump: false };
         this.pitch = 0;
         this.yaw = 0;
+
+        // Raycasting setup for block selection/placement
+        this.raycaster = new THREE.Raycaster();
+        this.reachDistance = 8; 
 
         // Player GLTF Model setup
         this.model = null;
@@ -47,8 +50,6 @@ export class Player {
             this.model = gltf.scene;
             this.model.scale.set(this.scale, this.scale, this.scale);
             this.scene.add(this.model);
-            
-            // Model ONLY visible in 3rd person to prevent camera clipping
             this.model.visible = this.isThirdPerson;
         }, undefined, (error) => {
             console.warn("Could not load player model glb:", error);
@@ -90,6 +91,48 @@ export class Player {
         }
     }
 
+    // --- BLOCK RAYCASTING FOR PLACING / DESTROYING ---
+    getLookAtBlock(blockObjectsList = []) {
+        const headPosition = new THREE.Vector3(
+            this.position.x,
+            this.position.y + this.eyeHeight,
+            this.position.z
+        );
+
+        const lookDir = new THREE.Vector3(0, 0, -1);
+        lookDir.applyEuler(new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ'));
+
+        this.raycaster.set(headPosition, lookDir);
+        this.raycaster.far = this.reachDistance;
+
+        const intersects = this.raycaster.intersectObjects(blockObjectsList, true);
+
+        if (intersects.length > 0) {
+            const hit = intersects[0];
+            const point = hit.point;
+            const normal = hit.face.normal;
+
+            // Target block position to destroy
+            const targetBlock = new THREE.Vector3(
+                Math.floor(point.x - normal.x * 0.1),
+                Math.floor(point.y - normal.y * 0.1),
+                Math.floor(point.z - normal.z * 0.1)
+            );
+
+            // Adjacent block position to place a new block
+            const placeBlock = new THREE.Vector3(
+                Math.floor(point.x + normal.x * 0.1),
+                Math.floor(point.y + normal.y * 0.1),
+                Math.floor(point.z + normal.z * 0.1)
+            );
+
+            return { targetBlock, placeBlock, hit };
+        }
+
+        return null;
+    }
+
+    // --- ACCURATE COLLISION SYSTEM ---
     isBlockAt(x, y, z) {
         const bx = Math.floor(x);
         const by = Math.floor(y);
@@ -118,6 +161,7 @@ export class Player {
 
     updateBoundingBox() {
         const halfW = this.width / 2;
+        // Bounding box aligned precisely from base of feet to head top
         this.boundingBox.set(
             new THREE.Vector3(this.position.x - halfW, this.position.y, this.position.z - halfW),
             new THREE.Vector3(this.position.x + halfW, this.position.y + this.height, this.position.z + halfW)
@@ -127,12 +171,13 @@ export class Player {
     checkCollisions(axis) {
         this.updateBoundingBox();
 
-        const minX = Math.floor(this.boundingBox.min.x);
-        const maxX = Math.floor(this.boundingBox.max.x);
-        const minY = Math.floor(this.boundingBox.min.y);
-        const maxY = Math.floor(this.boundingBox.max.y);
-        const minZ = Math.floor(this.boundingBox.min.z);
-        const maxZ = Math.floor(this.boundingBox.max.z);
+        // Sample blocks surrounding player's current bounding box
+        const minX = Math.floor(this.boundingBox.min.x - 0.1);
+        const maxX = Math.floor(this.boundingBox.max.x + 0.1);
+        const minY = Math.floor(this.boundingBox.min.y - 0.1);
+        const maxY = Math.floor(this.boundingBox.max.y + 0.1);
+        const minZ = Math.floor(this.boundingBox.min.z - 0.1);
+        const maxZ = Math.floor(this.boundingBox.max.z + 0.1);
 
         const blockBox = new THREE.Box3();
 
@@ -146,11 +191,13 @@ export class Player {
                         );
 
                         if (this.boundingBox.intersectsBox(blockBox)) {
+                            const margin = 0.001;
+
                             if (axis === 'x') {
                                 if (this.velocity.x > 0) {
-                                    this.position.x = blockBox.min.x - this.width / 2;
+                                    this.position.x = blockBox.min.x - this.width / 2 - margin;
                                 } else if (this.velocity.x < 0) {
-                                    this.position.x = blockBox.max.x + this.width / 2;
+                                    this.position.x = blockBox.max.x + this.width / 2 + margin;
                                 }
                                 this.velocity.x = 0;
                             }
@@ -161,16 +208,16 @@ export class Player {
                                     this.velocity.y = 0;
                                     this.isGrounded = true;
                                 } else if (this.velocity.y > 0) {
-                                    this.position.y = blockBox.min.y - this.height;
+                                    this.position.y = blockBox.min.y - this.height - margin;
                                     this.velocity.y = 0;
                                 }
                             }
 
                             if (axis === 'z') {
                                 if (this.velocity.z > 0) {
-                                    this.position.z = blockBox.min.z - this.width / 2;
+                                    this.position.z = blockBox.min.z - this.width / 2 - margin;
                                 } else if (this.velocity.z < 0) {
-                                    this.position.z = blockBox.max.z + this.width / 2;
+                                    this.position.z = blockBox.max.z + this.width / 2 + margin;
                                 }
                                 this.velocity.z = 0;
                             }
@@ -199,7 +246,7 @@ export class Player {
         this.velocity.x = moveDir.x * this.moveSpeed;
         this.velocity.z = moveDir.z * this.moveSpeed;
 
-        // --- 2. JUMPING & GRAVITY ---
+        // --- 2. JUMP & GRAVITY ---
         if (this.isGrounded && this.keys.jump) {
             this.velocity.y = this.jumpForce;
             this.isGrounded = false;
@@ -207,7 +254,7 @@ export class Player {
 
         this.velocity.y -= this.gravity * delta;
 
-        // --- 3. AXIS COLLISION RESOLUTION ---
+        // --- 3. SEPARATE AXIS COLLISION RESOLUTION ---
         this.position.x += this.velocity.x * delta;
         this.checkCollisions('x');
 
@@ -218,9 +265,9 @@ export class Player {
         this.position.y += this.velocity.y * delta;
         this.checkCollisions('y');
 
-        // Fallback ground floor
-        if (this.position.y <= 1) {
-            this.position.y = 1;
+        // Safety floor boundary
+        if (this.position.y <= 0) {
+            this.position.y = 0;
             this.velocity.y = 0;
             this.isGrounded = true;
         }
