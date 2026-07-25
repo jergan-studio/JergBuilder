@@ -7,26 +7,25 @@ export class Player {
         this.camera = camera;
         this.worldBlocks = worldBlocks;
 
-        // --- 1. SIZING & SCALE ---
-        // Player scale (Medium)
-        this.scale = 3; 
-        this.width = 0.6 * this.scale;     // 1.8 units wide
-        this.height = 1.8 * this.scale;    // 5.4 units tall
-        this.eyeHeight = 1.6 * this.scale; // Eye level in 1st person
+        // --- 1. SIZING & SCALE (Size 15) ---
+        this.scale = 15; 
+        this.width = 0.6 * this.scale;     // 9 units wide
+        this.height = 1.8 * this.scale;    // 27 units tall
+        this.eyeHeight = 1.6 * this.scale; // Eye level inside 1st person
 
-        // Spawn position lowered to ground height so you don't fly
-        this.position = new THREE.Vector3(0, 15, 0);
+        // Spawn position tuned to land smoothly on ground blocks
+        this.position = new THREE.Vector3(0, 30, 0);
         this.velocity = new THREE.Vector3();
 
-        // Movement physics tuned for 1x1x1 terrain blocks
-        this.moveSpeed = 12;
-        this.jumpForce = 14;
-        this.gravity = 35;
+        // Movement physics tuned for size 15 scale
+        this.moveSpeed = 25;
+        this.jumpForce = 28;
+        this.gravity = 65;
         this.isGrounded = false;
 
         // Camera Perspective Mode (false = 1st Person, true = 3rd Person)
         this.isThirdPerson = false;
-        this.thirdPersonDistance = 8; // Camera distance behind player in 3rd person
+        this.thirdPersonDistance = 2.5 * this.scale; // Distance behind player
 
         this.keys = { forward: false, backward: false, left: false, right: false, jump: false };
         this.pitch = 0;
