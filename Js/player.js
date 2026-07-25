@@ -5,33 +5,36 @@ export class Player {
     constructor(scene, camera, worldBlocks = []) {
         this.scene = scene;
         this.camera = camera;
-        // Supports both Array [] and Map / Object {} voxel structures
         this.worldBlocks = worldBlocks;
 
-        // Player physical dimensions (width: 0.6m, height: 1.8m)
-        this.width = 0.6;
-        this.height = 1.8;
-        this.eyeHeight = 1.6;
+        // Player Physical Dimensions (Scaled to medium size ~30)
+        this.scale = 30;
+        this.width = 0.6 * this.scale;   // 18 units wide
+        this.height = 1.8 * this.scale;  // 54 units high
+        this.eyeHeight = 1.6 * this.scale; // Eye level inside 1st person
 
-        this.position = new THREE.Vector3(0, 10, 0);
+        this.position = new THREE.Vector3(0, 100, 0);
         this.velocity = new THREE.Vector3();
 
-        this.moveSpeed = 10;
-        this.jumpForce = 11;
-        this.gravity = 28;
+        // Adjusted Movement Dynamics for Medium Scale 30
+        this.moveSpeed = 10 * (this.scale * 0.3);
+        this.jumpForce = 12 * Math.sqrt(this.scale);
+        this.gravity = 30 * (this.scale * 0.2);
         this.isGrounded = false;
+
+        // Camera Perspective Mode (false = 1st Person, true = 3rd Person)
+        this.isThirdPerson = false;
+        this.thirdPersonDistance = 5 * this.scale; // Distance behind player
 
         this.keys = { forward: false, backward: false, left: false, right: false, jump: false };
         this.pitch = 0;
         this.yaw = 0;
 
-        // Player Model setup
+        // Player GLTF Model setup
         this.model = null;
         this.loadPlayerModel();
 
-        // Bounding box for player
         this.boundingBox = new THREE.Box3();
-
         this.setupControls();
     }
 
@@ -41,16 +44,30 @@ export class Player {
 
         loader.load(modelUrl, (gltf) => {
             this.model = gltf.scene;
-            this.model.scale.set(1, 1, 1);
+            this.model.scale.set(this.scale, this.scale, this.scale);
             this.scene.add(this.model);
-            this.model.visible = false; // Hide model in 1st person
+            
+            // Visibility syncs with initial camera mode (hidden in 1st person)
+            this.model.visible = this.isThirdPerson;
         }, undefined, (error) => {
             console.warn("Could not load player model glb:", error);
         });
     }
 
     setupControls() {
-        window.addEventListener('keydown', (e) => this.updateKey(e.code, true));
+        window.addEventListener('keydown', (e) => {
+            this.updateKey(e.code, true);
+
+            // Toggle 3rd Person Camera View with F5 or C key
+            if (e.code === 'F5' || e.code === 'KeyC') {
+                e.preventDefault();
+                this.isThirdPerson = !this.isThirdPerson;
+                if (this.model) {
+                    this.model.visible = this.isThirdPerson;
+                }
+            }
+        });
+
         window.addEventListener('keyup', (e) => this.updateKey(e.code, false));
 
         window.addEventListener('mousemove', (e) => {
@@ -72,20 +89,17 @@ export class Player {
         }
     }
 
-    // Helper: checks if a voxel block exists at integer coordinate (x, y, z)
     isBlockAt(x, y, z) {
         const bx = Math.floor(x);
         const by = Math.floor(y);
         const bz = Math.floor(z);
 
-        // 1. If worldBlocks is a Map or Object keyed like "x,y,z"
         if (this.worldBlocks instanceof Map) {
             return this.worldBlocks.has(`${bx},${by},${bz}`);
         } else if (typeof this.worldBlocks === 'object' && !Array.isArray(this.worldBlocks)) {
             return !!this.worldBlocks[`${bx},${by},${bz}`];
         }
 
-        // 2. If worldBlocks is an Array of Mesh blocks
         if (Array.isArray(this.worldBlocks)) {
             for (let i = 0; i < this.worldBlocks.length; i++) {
                 const b = this.worldBlocks[i];
@@ -98,11 +112,9 @@ export class Player {
                 }
             }
         }
-
         return false;
     }
 
-    // Recalculate AABB player bounding box
     updateBoundingBox() {
         const halfW = this.width / 2;
         this.boundingBox.set(
@@ -111,7 +123,6 @@ export class Player {
         );
     }
 
-    // Grid-based AABB Collision Resolution
     checkCollisions(axis) {
         this.updateBoundingBox();
 
@@ -124,7 +135,6 @@ export class Player {
 
         const blockBox = new THREE.Box3();
 
-        // Check only voxels immediately surrounding the player
         for (let x = minX; x <= maxX; x++) {
             for (let y = minY; y <= maxY; y++) {
                 for (let z = minZ; z <= maxZ; z++) {
@@ -145,11 +155,11 @@ export class Player {
                             }
 
                             if (axis === 'y') {
-                                if (this.velocity.y < 0) { // Landing on top of block
+                                if (this.velocity.y < 0) {
                                     this.position.y = blockBox.max.y;
                                     this.velocity.y = 0;
                                     this.isGrounded = true;
-                                } else if (this.velocity.y > 0) { // Hitting block ceiling
+                                } else if (this.velocity.y > 0) {
                                     this.position.y = blockBox.min.y - this.height;
                                     this.velocity.y = 0;
                                 }
@@ -173,7 +183,7 @@ export class Player {
     }
 
     update(delta) {
-        // --- 1. MOVEMENT INPUT ---
+        // --- 1. MOVEMENT DIRECTION ---
         const moveDir = new THREE.Vector3();
         if (this.keys.forward) moveDir.z -= 1;
         if (this.keys.backward) moveDir.z += 1;
@@ -196,38 +206,49 @@ export class Player {
 
         this.velocity.y -= this.gravity * delta;
 
-        // --- 3. SEPARATE AXIS RESOLUTION ---
-        // X Movement & Collision
+        // --- 3. AXIS COLLISION RESOLUTION ---
         this.position.x += this.velocity.x * delta;
         this.checkCollisions('x');
 
-        // Z Movement & Collision
         this.position.z += this.velocity.z * delta;
         this.checkCollisions('z');
 
-        // Y Movement & Collision
         this.isGrounded = false;
         this.position.y += this.velocity.y * delta;
         this.checkCollisions('y');
 
-        // Ground level fallback (prevents falling below y = 0 if map generation hasn't completed)
         if (this.position.y <= 0) {
             this.position.y = 0;
             this.velocity.y = 0;
             this.isGrounded = true;
         }
 
-        // --- 4. CAMERA & MODEL UPDATES ---
+        // --- 4. MODEL SYNC ---
         if (this.model) {
             this.model.position.copy(this.position);
             this.model.rotation.y = this.yaw;
+            this.model.visible = this.isThirdPerson;
         }
 
-        this.camera.position.set(
+        // --- 5. CAMERA PERSPECTIVE CALCULATION ---
+        const headPosition = new THREE.Vector3(
             this.position.x,
             this.position.y + this.eyeHeight,
             this.position.z
         );
-        this.camera.quaternion.setFromEuler(new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ'));
+
+        if (this.isThirdPerson) {
+            // Offset camera behind and slightly above character head based on pitch/yaw
+            const cameraOffset = new THREE.Vector3(0, 0, this.thirdPersonDistance);
+            const cameraEuler = new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ');
+            cameraOffset.applyEuler(cameraEuler);
+
+            this.camera.position.copy(headPosition).add(cameraOffset);
+            this.camera.lookAt(headPosition);
+        } else {
+            // Standard First-Person View
+            this.camera.position.copy(headPosition);
+            this.camera.quaternion.setFromEuler(new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ'));
+        }
     }
 }
