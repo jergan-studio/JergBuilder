@@ -5,9 +5,10 @@ export class Player {
     constructor(scene, camera, worldBlocks = []) {
         this.scene = scene;
         this.camera = camera;
-        this.worldBlocks = worldBlocks; // Array/Map of voxel mesh blocks in scene
+        // Supports both Array [] and Map / Object {} voxel structures
+        this.worldBlocks = worldBlocks;
 
-        // Player physical dimensions (Minecraft-style AABB)
+        // Player physical dimensions (width: 0.6m, height: 1.8m)
         this.width = 0.6;
         this.height = 1.8;
         this.eyeHeight = 1.6;
@@ -28,27 +29,23 @@ export class Player {
         this.model = null;
         this.loadPlayerModel();
 
-        // Bounding box for collisions
+        // Bounding box for player
         this.boundingBox = new THREE.Box3();
-        this.updateBoundingBox();
 
         this.setupControls();
     }
 
     loadPlayerModel() {
         const loader = new GLTFLoader();
-        // GitHub raw URL for the glb file
         const modelUrl = 'https://raw.githubusercontent.com/jergan-studio/JergBuilder/main/jergplr.glb';
 
         loader.load(modelUrl, (gltf) => {
             this.model = gltf.scene;
             this.model.scale.set(1, 1, 1);
             this.scene.add(this.model);
-            
-            // Hide model in 1st person by default so camera isn't inside mesh
-            this.model.visible = false; 
+            this.model.visible = false; // Hide model in 1st person
         }, undefined, (error) => {
-            console.warn("Could not load player model glb, falling back to collision box:", error);
+            console.warn("Could not load player model glb:", error);
         });
     }
 
@@ -75,7 +72,37 @@ export class Player {
         }
     }
 
-    // Recalculates the player's bounding box based on current position
+    // Helper: checks if a voxel block exists at integer coordinate (x, y, z)
+    isBlockAt(x, y, z) {
+        const bx = Math.floor(x);
+        const by = Math.floor(y);
+        const bz = Math.floor(z);
+
+        // 1. If worldBlocks is a Map or Object keyed like "x,y,z"
+        if (this.worldBlocks instanceof Map) {
+            return this.worldBlocks.has(`${bx},${by},${bz}`);
+        } else if (typeof this.worldBlocks === 'object' && !Array.isArray(this.worldBlocks)) {
+            return !!this.worldBlocks[`${bx},${by},${bz}`];
+        }
+
+        // 2. If worldBlocks is an Array of Mesh blocks
+        if (Array.isArray(this.worldBlocks)) {
+            for (let i = 0; i < this.worldBlocks.length; i++) {
+                const b = this.worldBlocks[i];
+                if (b && b.position) {
+                    if (Math.floor(b.position.x) === bx &&
+                        Math.floor(b.position.y) === by &&
+                        Math.floor(b.position.z) === bz) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    // Recalculate AABB player bounding box
     updateBoundingBox() {
         const halfW = this.width / 2;
         this.boundingBox.set(
@@ -84,57 +111,69 @@ export class Player {
         );
     }
 
-    // Checks collision against world objects/blocks
+    // Grid-based AABB Collision Resolution
     checkCollisions(axis) {
         this.updateBoundingBox();
 
-        // Target box for block intersection checks
+        const minX = Math.floor(this.boundingBox.min.x);
+        const maxX = Math.floor(this.boundingBox.max.x);
+        const minY = Math.floor(this.boundingBox.min.y);
+        const maxY = Math.floor(this.boundingBox.max.y);
+        const minZ = Math.floor(this.boundingBox.min.z);
+        const maxZ = Math.floor(this.boundingBox.max.z);
+
         const blockBox = new THREE.Box3();
 
-        for (let i = 0; i < this.worldBlocks.length; i++) {
-            const block = this.worldBlocks[i];
-            if (!block || !block.position) continue;
+        // Check only voxels immediately surrounding the player
+        for (let x = minX; x <= maxX; x++) {
+            for (let y = minY; y <= maxY; y++) {
+                for (let z = minZ; z <= maxZ; z++) {
+                    if (this.isBlockAt(x, y, z)) {
+                        blockBox.set(
+                            new THREE.Vector3(x, y, z),
+                            new THREE.Vector3(x + 1, y + 1, z + 1)
+                        );
 
-            // Assuming 1x1x1 unit blocks centered at block.position
-            blockBox.setFromCenterAndSize(block.position, new THREE.Vector3(1, 1, 1));
+                        if (this.boundingBox.intersectsBox(blockBox)) {
+                            if (axis === 'x') {
+                                if (this.velocity.x > 0) {
+                                    this.position.x = blockBox.min.x - this.width / 2;
+                                } else if (this.velocity.x < 0) {
+                                    this.position.x = blockBox.max.x + this.width / 2;
+                                }
+                                this.velocity.x = 0;
+                            }
 
-            if (this.boundingBox.intersectsBox(blockBox)) {
-                if (axis === 'x') {
-                    if (this.velocity.x > 0) {
-                        this.position.x = blockBox.min.x - this.width / 2;
-                    } else if (this.velocity.x < 0) {
-                        this.position.x = blockBox.max.x + this.width / 2;
+                            if (axis === 'y') {
+                                if (this.velocity.y < 0) { // Landing on top of block
+                                    this.position.y = blockBox.max.y;
+                                    this.velocity.y = 0;
+                                    this.isGrounded = true;
+                                } else if (this.velocity.y > 0) { // Hitting block ceiling
+                                    this.position.y = blockBox.min.y - this.height;
+                                    this.velocity.y = 0;
+                                }
+                            }
+
+                            if (axis === 'z') {
+                                if (this.velocity.z > 0) {
+                                    this.position.z = blockBox.min.z - this.width / 2;
+                                } else if (this.velocity.z < 0) {
+                                    this.position.z = blockBox.max.z + this.width / 2;
+                                }
+                                this.velocity.z = 0;
+                            }
+
+                            this.updateBoundingBox();
+                        }
                     }
-                    this.velocity.x = 0;
                 }
-
-                if (axis === 'y') {
-                    if (this.velocity.y < 0) { // Falling down onto block
-                        this.position.y = blockBox.max.y;
-                        this.velocity.y = 0;
-                        this.isGrounded = true;
-                    } else if (this.velocity.y > 0) { // Hitting head on block above
-                        this.position.y = blockBox.min.y - this.height;
-                        this.velocity.y = 0;
-                    }
-                }
-
-                if (axis === 'z') {
-                    if (this.velocity.z > 0) {
-                        this.position.z = blockBox.min.z - this.width / 2;
-                    } else if (this.velocity.z < 0) {
-                        this.position.z = blockBox.max.z + this.width / 2;
-                    }
-                    this.velocity.z = 0;
-                }
-
-                this.updateBoundingBox();
             }
         }
     }
 
     update(delta) {
-        // --- 1. HORIZONTAL INPUT ---
+        // --- 1. MOVEMENT INPUT ---
         const moveDir = new THREE.Vector3();
         if (this.keys.forward) moveDir.z -= 1;
         if (this.keys.backward) moveDir.z += 1;
@@ -149,43 +188,41 @@ export class Player {
         this.velocity.x = moveDir.x * this.moveSpeed;
         this.velocity.z = moveDir.z * this.moveSpeed;
 
-        // --- 2. JUMPING & GRAVITY ---
-        if (this.isGrounded) {
-            if (this.keys.jump) {
-                this.velocity.y = this.jumpForce;
-                this.isGrounded = false;
-            }
+        // --- 2. JUMP & GRAVITY ---
+        if (this.isGrounded && this.keys.jump) {
+            this.velocity.y = this.jumpForce;
+            this.isGrounded = false;
         }
 
         this.velocity.y -= this.gravity * delta;
 
-        // --- 3. AXIS-SEPARATED MOVEMENT & COLLISION ---
-        // X Axis
+        // --- 3. SEPARATE AXIS RESOLUTION ---
+        // X Movement & Collision
         this.position.x += this.velocity.x * delta;
         this.checkCollisions('x');
 
-        // Z Axis
+        // Z Movement & Collision
         this.position.z += this.velocity.z * delta;
         this.checkCollisions('z');
 
-        // Y Axis (Vertical)
-        this.isGrounded = false; // Reset grounded check before Y movement
+        // Y Movement & Collision
+        this.isGrounded = false;
         this.position.y += this.velocity.y * delta;
         this.checkCollisions('y');
 
-        // Safety void floor check (e.g. falling off world)
-        if (this.position.y < -30) {
-            this.position.set(0, 15, 0);
-            this.velocity.set(0, 0, 0);
+        // Ground level fallback (prevents falling below y = 0 if map generation hasn't completed)
+        if (this.position.y <= 0) {
+            this.position.y = 0;
+            this.velocity.y = 0;
+            this.isGrounded = true;
         }
 
-        // --- 4. MODEL & CAMERA SYNC ---
+        // --- 4. CAMERA & MODEL UPDATES ---
         if (this.model) {
             this.model.position.copy(this.position);
             this.model.rotation.y = this.yaw;
         }
 
-        // First-person camera positioning
         this.camera.position.set(
             this.position.x,
             this.position.y + this.eyeHeight,
