@@ -7,24 +7,26 @@ export class Player {
         this.camera = camera;
         this.worldBlocks = worldBlocks;
 
-        // Player Physical Dimensions (Scaled to medium size ~30)
-        this.scale = 30;
-        this.width = 0.6 * this.scale;   // 18 units wide
-        this.height = 1.8 * this.scale;  // 54 units high
-        this.eyeHeight = 1.6 * this.scale; // Eye level inside 1st person
+        // --- 1. SIZING & SCALE ---
+        // Player scale (Medium)
+        this.scale = 3; 
+        this.width = 0.6 * this.scale;     // 1.8 units wide
+        this.height = 1.8 * this.scale;    // 5.4 units tall
+        this.eyeHeight = 1.6 * this.scale; // Eye level in 1st person
 
-        this.position = new THREE.Vector3(0, 100, 0);
+        // Spawn position lowered to ground height so you don't fly
+        this.position = new THREE.Vector3(0, 15, 0);
         this.velocity = new THREE.Vector3();
 
-        // Adjusted Movement Dynamics for Medium Scale 30
-        this.moveSpeed = 10 * (this.scale * 0.3);
-        this.jumpForce = 12 * Math.sqrt(this.scale);
-        this.gravity = 30 * (this.scale * 0.2);
+        // Movement physics tuned for 1x1x1 terrain blocks
+        this.moveSpeed = 12;
+        this.jumpForce = 14;
+        this.gravity = 35;
         this.isGrounded = false;
 
         // Camera Perspective Mode (false = 1st Person, true = 3rd Person)
         this.isThirdPerson = false;
-        this.thirdPersonDistance = 5 * this.scale; // Distance behind player
+        this.thirdPersonDistance = 8; // Camera distance behind player in 3rd person
 
         this.keys = { forward: false, backward: false, left: false, right: false, jump: false };
         this.pitch = 0;
@@ -47,7 +49,7 @@ export class Player {
             this.model.scale.set(this.scale, this.scale, this.scale);
             this.scene.add(this.model);
             
-            // Visibility syncs with initial camera mode (hidden in 1st person)
+            // Hidden in 1st person view by default
             this.model.visible = this.isThirdPerson;
         }, undefined, (error) => {
             console.warn("Could not load player model glb:", error);
@@ -58,8 +60,8 @@ export class Player {
         window.addEventListener('keydown', (e) => {
             this.updateKey(e.code, true);
 
-            // Toggle 3rd Person Camera View with F5 or C key
-            if (e.code === 'F5' || e.code === 'KeyC') {
+            // Toggle 3rd Person Camera View with the '[' key
+            if (e.code === 'BracketLeft' || e.key === '[') {
                 e.preventDefault();
                 this.isThirdPerson = !this.isThirdPerson;
                 if (this.model) {
@@ -183,7 +185,7 @@ export class Player {
     }
 
     update(delta) {
-        // --- 1. MOVEMENT DIRECTION ---
+        // --- 1. MOVEMENT INPUT ---
         const moveDir = new THREE.Vector3();
         if (this.keys.forward) moveDir.z -= 1;
         if (this.keys.backward) moveDir.z += 1;
@@ -198,7 +200,7 @@ export class Player {
         this.velocity.x = moveDir.x * this.moveSpeed;
         this.velocity.z = moveDir.z * this.moveSpeed;
 
-        // --- 2. JUMP & GRAVITY ---
+        // --- 2. JUMPING & GRAVITY ---
         if (this.isGrounded && this.keys.jump) {
             this.velocity.y = this.jumpForce;
             this.isGrounded = false;
@@ -217,8 +219,9 @@ export class Player {
         this.position.y += this.velocity.y * delta;
         this.checkCollisions('y');
 
-        if (this.position.y <= 0) {
-            this.position.y = 0;
+        // Fallback ground floor
+        if (this.position.y <= 1) {
+            this.position.y = 1;
             this.velocity.y = 0;
             this.isGrounded = true;
         }
@@ -230,7 +233,7 @@ export class Player {
             this.model.visible = this.isThirdPerson;
         }
 
-        // --- 5. CAMERA PERSPECTIVE CALCULATION ---
+        // --- 5. CAMERA UPDATE ---
         const headPosition = new THREE.Vector3(
             this.position.x,
             this.position.y + this.eyeHeight,
@@ -238,7 +241,6 @@ export class Player {
         );
 
         if (this.isThirdPerson) {
-            // Offset camera behind and slightly above character head based on pitch/yaw
             const cameraOffset = new THREE.Vector3(0, 0, this.thirdPersonDistance);
             const cameraEuler = new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ');
             cameraOffset.applyEuler(cameraEuler);
@@ -246,7 +248,6 @@ export class Player {
             this.camera.position.copy(headPosition).add(cameraOffset);
             this.camera.lookAt(headPosition);
         } else {
-            // Standard First-Person View
             this.camera.position.copy(headPosition);
             this.camera.quaternion.setFromEuler(new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ'));
         }
