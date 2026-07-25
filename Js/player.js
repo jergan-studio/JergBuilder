@@ -8,7 +8,7 @@ export class Player {
         this.worldBlocks = worldBlocks;
 
         // --- 1. SMALL SIZING & SCALE (Minecraft Standard Scale = 1) ---
-        this.scale = 1; 
+        this.scale = 0.5; 
         this.width = 0.6;     // 0.6 units wide
         this.height = 1.8;    // 1.8 units tall
         this.eyeHeight = 1.62; // Standard eye level
