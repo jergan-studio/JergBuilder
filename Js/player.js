@@ -13,10 +13,11 @@ export class Player {
         this.height = 1.8 * this.scale;    // 0.9 units tall
         this.eyeHeight = 1.6 * this.scale; // 0.8 units eye level
 
-        this.position = new THREE.Vector3(0, 15, 0);
+        // Spawn position elevated to avoid spawning inside/below terrain
+        this.position = new THREE.Vector3(0, 30, 0);
         this.velocity = new THREE.Vector3();
 
-        // Physics parameters tuned for 0.5 scale
+        // Physics parameters
         this.moveSpeed = 8;
         this.jumpForce = 10;
         this.gravity = 28;
@@ -24,17 +25,17 @@ export class Player {
 
         // Camera Perspective Mode (false = 1st Person, true = 3rd Person)
         this.isThirdPerson = false;
-        this.thirdPersonDistance = 3 * this.scale + 2;
+        this.thirdPersonDistance = 4;
 
         this.keys = { forward: false, backward: false, left: false, right: false, jump: false };
         this.pitch = 0;
         this.yaw = 0;
 
-        // Raycasting setup for block selection/placement
+        // Raycasting setup
         this.raycaster = new THREE.Raycaster();
         this.reachDistance = 8; 
 
-        // Player GLTF Model setup
+        // Player GLTF Model
         this.model = null;
         this.loadPlayerModel();
 
@@ -91,7 +92,43 @@ export class Player {
         }
     }
 
-    // --- BLOCK RAYCASTING FOR PLACING / DESTROYING ---
+    // --- FLEXIBLE BLOCK LOOKUP ---
+    isBlockAt(x, y, z) {
+        if (!this.worldBlocks) return false;
+
+        const bx = Math.floor(x);
+        const by = Math.floor(y);
+        const bz = Math.floor(z);
+
+        const key1 = `${bx},${by},${bz}`;
+        const key2 = `${bx}_${by}_${bz}`;
+
+        // Map lookup
+        if (this.worldBlocks instanceof Map) {
+            return this.worldBlocks.has(key1) || this.worldBlocks.has(key2);
+        } 
+        // Object lookup
+        else if (typeof this.worldBlocks === 'object' && !Array.isArray(this.worldBlocks)) {
+            return !!(this.worldBlocks[key1] || this.worldBlocks[key2]);
+        }
+
+        // Array lookup
+        if (Array.isArray(this.worldBlocks)) {
+            for (let i = 0; i < this.worldBlocks.length; i++) {
+                const b = this.worldBlocks[i];
+                if (b && b.position) {
+                    if (Math.floor(b.position.x) === bx &&
+                        Math.floor(b.position.y) === by &&
+                        Math.floor(b.position.z) === bz) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    // --- RAYCAST FOR BLOCK SELECTION / PLACEMENT ---
     getLookAtBlock(blockObjectsList = []) {
         const headPosition = new THREE.Vector3(
             this.position.x,
@@ -112,14 +149,12 @@ export class Player {
             const point = hit.point;
             const normal = hit.face.normal;
 
-            // Target block position to destroy
             const targetBlock = new THREE.Vector3(
                 Math.floor(point.x - normal.x * 0.1),
                 Math.floor(point.y - normal.y * 0.1),
                 Math.floor(point.z - normal.z * 0.1)
             );
 
-            // Adjacent block position to place a new block
             const placeBlock = new THREE.Vector3(
                 Math.floor(point.x + normal.x * 0.1),
                 Math.floor(point.y + normal.y * 0.1),
@@ -132,36 +167,8 @@ export class Player {
         return null;
     }
 
-    // --- ACCURATE COLLISION SYSTEM ---
-    isBlockAt(x, y, z) {
-        const bx = Math.floor(x);
-        const by = Math.floor(y);
-        const bz = Math.floor(z);
-
-        if (this.worldBlocks instanceof Map) {
-            return this.worldBlocks.has(`${bx},${by},${bz}`);
-        } else if (typeof this.worldBlocks === 'object' && !Array.isArray(this.worldBlocks)) {
-            return !!this.worldBlocks[`${bx},${by},${bz}`];
-        }
-
-        if (Array.isArray(this.worldBlocks)) {
-            for (let i = 0; i < this.worldBlocks.length; i++) {
-                const b = this.worldBlocks[i];
-                if (b && b.position) {
-                    if (Math.floor(b.position.x) === bx &&
-                        Math.floor(b.position.y) === by &&
-                        Math.floor(b.position.z) === bz) {
-                        return true;
-                    }
-                }
-            }
-        }
-        return false;
-    }
-
     updateBoundingBox() {
         const halfW = this.width / 2;
-        // Bounding box aligned precisely from base of feet to head top
         this.boundingBox.set(
             new THREE.Vector3(this.position.x - halfW, this.position.y, this.position.z - halfW),
             new THREE.Vector3(this.position.x + halfW, this.position.y + this.height, this.position.z + halfW)
@@ -171,7 +178,6 @@ export class Player {
     checkCollisions(axis) {
         this.updateBoundingBox();
 
-        // Sample blocks surrounding player's current bounding box
         const minX = Math.floor(this.boundingBox.min.x - 0.1);
         const maxX = Math.floor(this.boundingBox.max.x + 0.1);
         const minY = Math.floor(this.boundingBox.min.y - 0.1);
@@ -254,7 +260,7 @@ export class Player {
 
         this.velocity.y -= this.gravity * delta;
 
-        // --- 3. SEPARATE AXIS COLLISION RESOLUTION ---
+        // --- 3. AXIS COLLISION RESOLUTION ---
         this.position.x += this.velocity.x * delta;
         this.checkCollisions('x');
 
@@ -265,11 +271,10 @@ export class Player {
         this.position.y += this.velocity.y * delta;
         this.checkCollisions('y');
 
-        // Safety floor boundary
-        if (this.position.y <= 0) {
-            this.position.y = 0;
-            this.velocity.y = 0;
-            this.isGrounded = true;
+        // Floor safety boundary
+        if (this.position.y <= -50) {
+            this.position.set(0, 30, 0); // Respawn if fallen out of world
+            this.velocity.set(0, 0, 0);
         }
 
         // --- 4. MODEL SYNC ---
