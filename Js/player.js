@@ -5,18 +5,19 @@ export class Player {
     constructor(scene, camera, worldBlocks = []) {
         this.scene = scene;
         this.camera = camera;
-        this.worldBlocks = worldBlocks;
+        this.worldBlocks = worldBlocks; // Can be Mesh Array, Chunk Group, or Map
 
-        // --- 1. PROPORTIONAL SIZING & SCALE ---
-        this.scale = 0.5; 
+        // --- 1. SIZING & SCALE ---
+        this.scale = 0.5;
         this.width = 0.6 * this.scale;     // 0.3 units wide
         this.height = 1.8 * this.scale;    // 0.9 units tall
         this.eyeHeight = 1.6 * this.scale; // 0.8 units eye height
 
-        this.position = new THREE.Vector3(0, 20, 0);
+        // Spawn position (start high above ground)
+        this.position = new THREE.Vector3(0, 30, 0);
         this.velocity = new THREE.Vector3();
 
-        // Physics parameters
+        // Movement Physics
         this.moveSpeed = 8;
         this.jumpForce = 10;
         this.gravity = 28;
@@ -30,11 +31,11 @@ export class Player {
         this.pitch = 0;
         this.yaw = 0;
 
-        // Raycasting for direct collision & block placement
+        // Raycasting setup
         this.raycaster = new THREE.Raycaster();
-        this.reachDistance = 8; 
+        this.reachDistance = 8;
 
-        // Player Model
+        // Player Model setup
         this.model = null;
         this.loadPlayerModel();
 
@@ -59,7 +60,7 @@ export class Player {
         window.addEventListener('keydown', (e) => {
             this.updateKey(e.code, true);
 
-            // Toggle 3rd Person View with '[' key
+            // Toggle 3rd Person View with the '[' key
             if (e.code === 'BracketLeft' || e.key === '[') {
                 e.preventDefault();
                 this.isThirdPerson = !this.isThirdPerson;
@@ -90,68 +91,99 @@ export class Player {
         }
     }
 
-    // Helper to extract valid meshes from whatever worldBlocks contains
-    getCollisionTargets() {
+    // --- EXTRACT COLLISION MESHES FROM ANY MAP GENERATOR ---
+    getCollisionMeshes() {
         if (!this.worldBlocks) return [];
-        if (Array.isArray(this.worldBlocks)) return this.worldBlocks;
-        if (this.worldBlocks.children) return this.worldBlocks.children;
-        return [this.worldBlocks];
+
+        // If worldBlocks is passed as a THREE.Scene or THREE.Group chunk
+        if (this.worldBlocks.children && Array.isArray(this.worldBlocks.children)) {
+            return this.worldBlocks.children;
+        }
+
+        // If worldBlocks is an array of Meshes / InstancedMeshes
+        if (Array.isArray(this.worldBlocks)) {
+            return this.worldBlocks;
+        }
+
+        // Fallback to checking full scene children
+        return this.scene.children.filter(child => child !== this.model && child.isMesh);
     }
 
-    // --- RAYCAST-BASED DIRECT COLLISION SYSTEM ---
+    // --- ACCURATE MULTI-RAY COLLISION RESOLUTION ---
     resolveCollisions() {
-        const targets = this.getCollisionTargets();
-        if (targets.length === 0) return;
+        const meshes = this.getCollisionMeshes();
+        if (meshes.length === 0) return;
 
-        // 1. GROUND / CEILING COLLISION (Y-AXIS)
-        const feetPos = this.position.clone();
-        feetPos.y += 0.1; // Raycast slightly above feet pointing down
+        const halfW = this.width / 2;
 
-        this.raycaster.set(feetPos, new THREE.Vector3(0, -1, 0));
-        this.raycaster.far = 0.3; // Small distance check under feet
+        // 1. VERTICAL COLLISION (GROUND & FEET)
+        // Check 5 points on feet (4 corners + center)
+        const footOffsets = [
+            new THREE.Vector3(0, 0, 0),
+            new THREE.Vector3(halfW, 0, halfW),
+            new THREE.Vector3(-halfW, 0, halfW),
+            new THREE.Vector3(halfW, 0, -halfW),
+            new THREE.Vector3(-halfW, 0, -halfW)
+        ];
 
-        const groundHits = this.raycaster.intersectObjects(targets, true);
+        let landed = false;
 
-        if (groundHits.length > 0 && this.velocity.y <= 0) {
-            const hit = groundHits[0];
-            this.position.y = hit.point.y;
-            this.velocity.y = 0;
-            this.isGrounded = true;
-        } else {
+        for (let offset of footOffsets) {
+            const rayOrigin = this.position.clone().add(offset);
+            rayOrigin.y += 0.2; // Start ray slightly inside player body
+
+            this.raycaster.set(rayOrigin, new THREE.Vector3(0, -1, 0));
+            this.raycaster.far = 0.3; // Check downward distance
+
+            const hits = this.raycaster.intersectObjects(meshes, true);
+
+            if (hits.length > 0 && this.velocity.y <= 0) {
+                const hit = hits[0];
+                this.position.y = hit.point.y;
+                this.velocity.y = 0;
+                this.isGrounded = true;
+                landed = true;
+                break;
+            }
+        }
+
+        if (!landed) {
             this.isGrounded = false;
         }
 
-        // 2. HORIZONTAL WALL COLLISION (X & Z AXIS)
-        const directions = [
-            new THREE.Vector3(1, 0, 0),  // Right
-            new THREE.Vector3(-1, 0, 0), // Left
-            new THREE.Vector3(0, 0, 1),  // Back
-            new THREE.Vector3(0, 0, -1)  // Forward
+        // 2. HORIZONTAL WALL COLLISION (X & Z AXES)
+        const checkHeights = [0.2, this.height * 0.5, this.height - 0.1];
+        const wallDirections = [
+            new THREE.Vector3(1, 0, 0),
+            new THREE.Vector3(-1, 0, 0),
+            new THREE.Vector3(0, 0, 1),
+            new THREE.Vector3(0, 0, -1)
         ];
 
-        const rayOrigin = this.position.clone();
-        rayOrigin.y += this.height * 0.5; // Cast from body center
+        for (let h of checkHeights) {
+            const bodyCenter = this.position.clone();
+            bodyCenter.y += h;
 
-        const wallRadius = this.width / 2;
+            for (let dir of wallDirections) {
+                this.raycaster.set(bodyCenter, dir);
+                this.raycaster.far = halfW + 0.05;
 
-        for (let dir of directions) {
-            this.raycaster.set(rayOrigin, dir);
-            this.raycaster.far = wallRadius + 0.05;
+                const hits = this.raycaster.intersectObjects(meshes, true);
 
-            const wallHits = this.raycaster.intersectObjects(targets, true);
-            if (wallHits.length > 0) {
-                const hit = wallHits[0];
-                const overlap = (wallRadius + 0.05) - hit.distance;
+                if (hits.length > 0) {
+                    const hit = hits[0];
+                    const overlap = (halfW + 0.05) - hit.distance;
 
-                // Push player back away from the wall
-                this.position.sub(dir.clone().multiplyScalar(overlap));
+                    // Push player out of wall
+                    this.position.sub(dir.clone().multiplyScalar(overlap));
+                }
             }
         }
     }
 
-    // --- RAYCAST FOR BLOCK PLACEMENT / DESTROYING ---
+    // --- RAYCAST FOR TARGETING / PLACING / BREAKING BLOCKS ---
     getLookAtBlock() {
-        const targets = this.getCollisionTargets();
+        const meshes = this.getCollisionMeshes();
         const headPosition = new THREE.Vector3(
             this.position.x,
             this.position.y + this.eyeHeight,
@@ -164,7 +196,7 @@ export class Player {
         this.raycaster.set(headPosition, lookDir);
         this.raycaster.far = this.reachDistance;
 
-        const intersects = this.raycaster.intersectObjects(targets, true);
+        const intersects = this.raycaster.intersectObjects(meshes, true);
 
         if (intersects.length > 0) {
             const hit = intersects[0];
@@ -220,9 +252,9 @@ export class Player {
 
         this.resolveCollisions();
 
-        // Respawn check if player falls out of bounds
+        // Respawn if player falls into void
         if (this.position.y <= -30) {
-            this.position.set(0, 20, 0);
+            this.position.set(0, 30, 0);
             this.velocity.set(0, 0, 0);
         }
 
