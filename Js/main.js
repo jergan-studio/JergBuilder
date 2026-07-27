@@ -1,313 +1,310 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-let generateMap = null;
-let Player = null;
+export class Player {
+    constructor(scene, camera, worldBlocks = []) {
+        this.scene = scene;
+        this.camera = camera;
+        this.worldBlocks = worldBlocks;
 
-let scene, camera, renderer, player;
-let gameRunning = false;
-let mobileModeEnabled = false;
+        // --- 1. SIZING & SCALE ---
+        this.scale = 0.5;
+        this.width = 0.6 * this.scale;     // 0.3 units wide
+        this.height = 1.8 * this.scale;    // 0.9 units tall
+        this.eyeHeight = 1.6 * this.scale; // 0.8 units eye height
 
-const canvas = document.getElementById('gameCanvas');
-const clock = new THREE.Clock();
+        // Spawn position
+        this.position = new THREE.Vector3(0, 20, 0);
+        this.velocity = new THREE.Vector3();
 
-// --- 1. MODULE LOADING ---
-async function safelyLoadModules() {
-    try {
-        const mapMod = await import('../Map/mapGenerator.js');
-        generateMap = mapMod.generateMap;
-    } catch (e) { 
-        console.error("Could not load Map/mapGenerator.js", e); 
+        // Movement Physics
+        this.moveSpeed = 8;
+        this.jumpForce = 10;
+        this.gravity = 28;
+        this.isGrounded = false;
+
+        // Camera Perspective Mode (false = 1st Person, true = 3rd Person)
+        this.isThirdPerson = false;
+        this.thirdPersonDistance = 4;
+
+        this.keys = { forward: false, backward: false, left: false, right: false, jump: false };
+        this.pitch = 0;
+        this.yaw = 0;
+
+        // Raycasting for block targeting / placing
+        this.raycaster = new THREE.Raycaster();
+        this.reachDistance = 8;
+
+        // Player Model
+        this.model = null;
+        this.loadPlayerModel();
+
+        this.boundingBox = new THREE.Box3();
+        this.setupControls();
     }
 
-    try {
-        const playerMod = await import('./player.js');
-        Player = playerMod.Player;
-    } catch (e) { 
-        console.error("Could not load Js/player.js", e); 
-    }
-}
+    loadPlayerModel() {
+        const loader = new GLTFLoader();
+        const modelUrl = 'https://raw.githubusercontent.com/jergan-studio/JergBuilder/main/jergplr.glb';
 
-// --- 2. INITIALIZATION ---
-function init() {
-    // Auto-detect touch screen / mobile devices
-    if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
-        mobileModeEnabled = true;
-    }
-
-    // Attach menu click listeners IMMEDIATELY before dynamic modules load
-    setupMenuEvents();
-
-    // Load dynamic Three.js modules in background
-    safelyLoadModules();
-
-    // Setup Three.js scene
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xa5d6a7); 
-
-    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    
-    if (canvas) {
-        renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
+        loader.load(modelUrl, (gltf) => {
+            this.model = gltf.scene;
+            this.model.scale.set(this.scale, this.scale, this.scale);
+            this.scene.add(this.model);
+            this.model.visible = this.isThirdPerson;
+        }, undefined, (error) => {
+            console.warn("Could not load player model glb:", error);
+        });
     }
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
-    scene.add(ambientLight);
+    setupControls() {
+        window.addEventListener('keydown', (e) => {
+            this.updateKey(e.code, true);
 
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
-    dirLight.position.set(10, 20, 10);
-    scene.add(dirLight);
+            // Toggle 3rd Person View with '['
+            if (e.code === 'BracketLeft' || e.key === '[') {
+                e.preventDefault();
+                this.isThirdPerson = !this.isThirdPerson;
+                if (this.model) {
+                    this.model.visible = this.isThirdPerson;
+                }
+            }
+        });
 
-    setupPointerLock();
-    window.addEventListener('resize', onWindowResize);
-    animate();
-}
+        window.addEventListener('keyup', (e) => this.updateKey(e.code, false));
 
-// --- 3. DISPLAY HELPER FUNCTIONS ---
-function hideMenu(id) {
-    const el = document.getElementById(id);
-    if (el) {
-        el.classList.add('hidden');
-        el.style.display = 'none';
+        window.addEventListener('mousemove', (e) => {
+            if (document.pointerLockElement) {
+                this.yaw -= e.movementX * 0.002;
+                this.pitch -= e.movementY * 0.002;
+                this.pitch = Math.max(-Math.PI / 2.05, Math.min(Math.PI / 2.05, this.pitch));
+            }
+        });
     }
-}
 
-function showMenu(id) {
-    const el = document.getElementById(id);
-    if (el) {
-        el.classList.remove('hidden');
-        // Standard overlays use flex, controls use block
-        el.style.display = (id === 'hud' || id === 'mobileTouchControls') ? 'block' : 'flex';
-    }
-}
-
-function hideAllMenus() {
-    ['mainMenu', 'worldsMenu', 'skinsMenu', 'settingsMenu', 'escMenu'].forEach(id => hideMenu(id));
-}
-
-// --- 4. POINTER LOCK SETUP (PC ONLY) ---
-function setupPointerLock() {
-    if (!canvas) return;
-
-    canvas.addEventListener('click', () => {
-        if (gameRunning && !mobileModeEnabled) {
-            canvas.requestPointerLock();
+    updateKey(code, isPressed) {
+        switch (code) {
+            case 'KeyW': case 'ArrowUp': this.keys.forward = isPressed; break;
+            case 'KeyS': case 'ArrowDown': this.keys.backward = isPressed; break;
+            case 'KeyA': case 'ArrowLeft': this.keys.left = isPressed; break;
+            case 'KeyD': case 'ArrowRight': this.keys.right = isPressed; break;
+            case 'Space': this.keys.jump = isPressed; break;
         }
-    });
+    }
 
-    document.addEventListener('pointerlockchange', () => {
-        if (mobileModeEnabled) return;
+    // Automatically retrieves valid terrain meshes from scene or worldBlocks
+    getTerrainMeshes() {
+        let meshes = [];
 
-        if (document.pointerLockElement === canvas) {
-            hideMenu('escMenu');
-            showMenu('hud');
-            gameRunning = true;
+        if (Array.isArray(this.worldBlocks) && this.worldBlocks.length > 0) {
+            meshes = this.worldBlocks;
+        } else if (this.worldBlocks && this.worldBlocks.children) {
+            meshes = this.worldBlocks.children;
         } else {
-            if (gameRunning) {
-                showMenu('escMenu');
-                hideMenu('hud');
-            }
+            // Search full scene for mesh terrain
+            this.scene.traverse((child) => {
+                if (child.isMesh && child !== this.model && !this.isDescendantOf(child, this.model)) {
+                    meshes.push(child);
+                }
+            });
         }
-    });
-}
-
-// --- 5. EVENT LISTENERS & MENU NAVIGATION ---
-function setupMenuEvents() {
-    let selectedGamemode = 'creative';
-
-    const btnToggleMobile = document.getElementById('btnToggleMobile');
-    if (btnToggleMobile) {
-        btnToggleMobile.innerText = mobileModeEnabled ? "Mobile Controls: ON" : "Mobile Controls: OFF";
-        btnToggleMobile.style.backgroundColor = mobileModeEnabled ? "#81c784" : "#333";
-        btnToggleMobile.style.color = mobileModeEnabled ? "#1c1d31" : "#fff";
+        return meshes;
     }
 
-    // Global click listener to avoid missing dynamic elements or bubbling bugs
-    window.addEventListener('click', (e) => {
-        const btn = e.target.closest('button');
-        if (!btn) return;
-
-        const id = btn.id;
-        const action = btn.getAttribute('data-action');
-
-        // OPEN WORLDS MENU
-        if (id === 'btnWorlds' || action === 'open-worlds' || btn.innerText.includes('Explore Worlds')) {
-            e.preventDefault();
-            hideAllMenus();
-            showMenu('worldsMenu');
-            return;
+    isDescendantOf(object, parent) {
+        if (!parent) return false;
+        let obj = object.parent;
+        while (obj) {
+            if (obj === parent) return true;
+            obj = obj.parent;
         }
+        return false;
+    }
 
-        // OPEN SKINS MENU
-        if (id === 'btnSkins' || action === 'open-skins' || btn.innerText.includes('Dress Up Skin')) {
-            e.preventDefault();
-            hideAllMenus();
-            showMenu('skinsMenu');
-            return;
-        }
+    // --- RAYCAST TARGETING (FOR BLOCK PLACEMENT / DESTROYING) ---
+    getLookAtBlock() {
+        const meshes = this.getTerrainMeshes();
+        if (meshes.length === 0) return null;
 
-        // OPEN SETTINGS MENU
-        if (id === 'btnSettingsMenu' || action === 'open-settings' || btn.innerText.includes('Settings')) {
-            e.preventDefault();
-            hideAllMenus();
-            showMenu('settingsMenu');
-            return;
-        }
+        const headPosition = new THREE.Vector3(
+            this.position.x,
+            this.position.y + this.eyeHeight,
+            this.position.z
+        );
 
-        // BACK TO MAIN MENU
-        if (btn.classList.contains('btnBack') || action === 'go-back' || btn.innerText.includes('Back')) {
-            e.preventDefault();
-            hideAllMenus();
-            showMenu('mainMenu');
-            return;
-        }
+        const lookDir = new THREE.Vector3(0, 0, -1);
+        lookDir.applyEuler(new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ'));
 
-        // TOGGLE MOBILE CONTROLS
-        if (id === 'btnToggleMobile' || action === 'toggle-mobile') {
-            e.preventDefault();
-            mobileModeEnabled = !mobileModeEnabled;
-            btn.innerText = mobileModeEnabled ? "Mobile Controls: ON" : "Mobile Controls: OFF";
-            btn.style.backgroundColor = mobileModeEnabled ? "#81c784" : "#333";
-            btn.style.color = mobileModeEnabled ? "#1c1d31" : "#fff";
-            return;
-        }
+        this.raycaster.set(headPosition, lookDir);
+        this.raycaster.far = this.reachDistance;
 
-        // SELECT CREATIVE MODE
-        if (id === 'modeCreative' || action === 'mode-creative') {
-            e.preventDefault();
-            selectedGamemode = 'creative';
-            const creativeBtn = document.getElementById('modeCreative');
-            const survivalBtn = document.getElementById('modeSurvival');
-            if (creativeBtn) { creativeBtn.style.backgroundColor = "#81c784"; creativeBtn.style.color = "#1c1d31"; creativeBtn.style.opacity = "1"; }
-            if (survivalBtn) { survivalBtn.style.backgroundColor = "#333"; survivalBtn.style.opacity = "0.5"; survivalBtn.style.color = "#fff"; }
-            return;
-        }
+        const intersects = this.raycaster.intersectObjects(meshes, true);
 
-        // SELECT SURVIVAL MODE
-        if (id === 'modeSurvival' || action === 'mode-survival') {
-            e.preventDefault();
-            selectedGamemode = 'survival';
-            const creativeBtn = document.getElementById('modeCreative');
-            const survivalBtn = document.getElementById('modeSurvival');
-            if (survivalBtn) { survivalBtn.style.backgroundColor = "#f44336"; survivalBtn.style.color = "#ffffff"; survivalBtn.style.opacity = "1"; }
-            if (creativeBtn) { creativeBtn.style.backgroundColor = "#333"; creativeBtn.style.opacity = "0.5"; creativeBtn.style.color = "#fff"; }
-            return;
-        }
+        if (intersects.length > 0) {
+            const hit = intersects[0];
+            const point = hit.point;
+            const normal = hit.face ? hit.face.normal.clone() : new THREE.Vector3(0, 1, 0);
 
-        // LAUNCH PRESET WORLD
-        if (btn.classList.contains('world-select') || action === 'select-world') {
-            e.preventDefault();
-            const worldSlot = btn.getAttribute('data-world') || 'world1';
-            if (generateMap) {
-                try { generateMap(scene, 'flat', worldSlot); } catch (err) { console.error(err); }
+            // Apply world rotation of object if transformed
+            if (hit.object) {
+                normal.applyQuaternion(hit.object.getWorldQuaternion(new THREE.Quaternion()));
             }
-            updateHud("CREATIVE MODE", '#81c784');
-            launchGame();
-            return;
+
+            // Target block to break
+            const targetBlock = new THREE.Vector3(
+                Math.floor(point.x - normal.x * 0.4),
+                Math.floor(point.y - normal.y * 0.4),
+                Math.floor(point.z - normal.z * 0.4)
+            );
+
+            // Adjacent position to place a new block
+            const placeBlock = new THREE.Vector3(
+                Math.floor(point.x + normal.x * 0.4),
+                Math.floor(point.y + normal.y * 0.4),
+                Math.floor(point.z + normal.z * 0.4)
+            );
+
+            return { targetBlock, placeBlock, hit };
         }
 
-        // CREATE NEW WORLD
-        if (id === 'btnCreateWorld' || action === 'create-world') {
-            e.preventDefault();
-            const seedInput = document.getElementById('worldSeed');
-            const rawSeedValue = seedInput ? seedInput.value : "";
-            if (generateMap) {
-                try { generateMap(scene, 'hills', rawSeedValue); } catch (err) { console.error(err); }
+        return null;
+    }
+
+    // --- ROBUST COLLISION SYSTEM ---
+    resolveCollisions() {
+        const meshes = this.getTerrainMeshes();
+        if (meshes.length === 0) return;
+
+        const halfW = this.width / 2;
+
+        // 1. VERTICAL (GROUND / CEILING) COLLISION
+        const checkPoints = [
+            new THREE.Vector3(0, 0, 0),
+            new THREE.Vector3(halfW * 0.8, 0, halfW * 0.8),
+            new THREE.Vector3(-halfW * 0.8, 0, halfW * 0.8),
+            new THREE.Vector3(halfW * 0.8, 0, -halfW * 0.8),
+            new THREE.Vector3(-halfW * 0.8, 0, -halfW * 0.8)
+        ];
+
+        let landed = false;
+
+        for (let pt of checkPoints) {
+            const rayOrigin = this.position.clone().add(pt);
+            rayOrigin.y += 0.4; // Cast down starting inside lower torso
+
+            this.raycaster.set(rayOrigin, new THREE.Vector3(0, -1, 0));
+            this.raycaster.far = 0.5;
+
+            const hits = this.raycaster.intersectObjects(meshes, true);
+
+            if (hits.length > 0 && this.velocity.y <= 0) {
+                const hit = hits[0];
+                this.position.y = hit.point.y;
+                this.velocity.y = 0;
+                this.isGrounded = true;
+                landed = true;
+                break;
             }
-            updateHud(`${selectedGamemode.toUpperCase()} MODE`, selectedGamemode === 'survival' ? '#f44336' : '#81c784');
-            launchGame();
-            return;
         }
 
-        // OPEN PAUSE MENU (MOBILE BUTTON)
-        if (action === 'open-pause' || id === 'btnMobilePause') {
-            e.preventDefault();
-            gameRunning = false;
-            hideMenu('mobileTouchControls');
-            showMenu('escMenu');
-            return;
+        if (!landed) {
+            this.isGrounded = false;
         }
 
-        // RESUME GAME
-        if (id === 'btnResume' || action === 'resume-game') {
-            e.preventDefault();
-            hideAllMenus();
-            showMenu('hud');
-            if (mobileModeEnabled) {
-                showMenu('mobileTouchControls');
-            } else if (canvas) {
-                canvas.requestPointerLock();
+        // 2. HORIZONTAL WALL COLLISION (X & Z)
+        const heights = [0.2, this.height * 0.5, this.height - 0.1];
+        const directions = [
+            new THREE.Vector3(1, 0, 0),
+            new THREE.Vector3(-1, 0, 0),
+            new THREE.Vector3(0, 0, 1),
+            new THREE.Vector3(0, 0, -1)
+        ];
+
+        for (let h of heights) {
+            const center = this.position.clone();
+            center.y += h;
+
+            for (let dir of directions) {
+                this.raycaster.set(center, dir);
+                this.raycaster.far = halfW + 0.08;
+
+                const hits = this.raycaster.intersectObjects(meshes, true);
+
+                if (hits.length > 0) {
+                    const hit = hits[0];
+                    const overlap = (halfW + 0.08) - hit.distance;
+                    this.position.sub(dir.clone().multiplyScalar(overlap));
+                }
             }
-            gameRunning = true;
-            return;
-        }
-
-        // QUIT TO MAIN MENU
-        if (id === 'btnQuit' || action === 'quit-game') {
-            e.preventDefault();
-            gameRunning = false;
-            if (document.pointerLockElement === canvas) document.exitPointerLock();
-            hideAllMenus();
-            hideMenu('hud');
-            hideMenu('mobileTouchControls');
-            showMenu('mainMenu');
-            return;
-        }
-    });
-
-    function updateHud(text, bgColor) {
-        const hudDisplay = document.getElementById('hudGamemodeDisplay');
-        if (hudDisplay) {
-            hudDisplay.innerText = text;
-            hudDisplay.style.backgroundColor = bgColor;
         }
     }
 
-    function launchGame() {
-        hideAllMenus();
-        showMenu('hud');
+    update(delta) {
+        // --- 1. MOVEMENT INPUT ---
+        const moveDir = new THREE.Vector3();
+        if (this.keys.forward) moveDir.z -= 1;
+        if (this.keys.backward) moveDir.z += 1;
+        if (this.keys.left) moveDir.x -= 1;
+        if (this.keys.right) moveDir.x += 1;
 
-        if (mobileModeEnabled) {
-            showMenu('mobileTouchControls');
+        moveDir.normalize();
+
+        const euler = new THREE.Euler(0, this.yaw, 0, 'YXZ');
+        moveDir.applyEuler(euler);
+
+        this.velocity.x = moveDir.x * this.moveSpeed;
+        this.velocity.z = moveDir.z * this.moveSpeed;
+
+        // --- 2. JUMP & GRAVITY ---
+        if (this.isGrounded && this.keys.jump) {
+            this.velocity.y = this.jumpForce;
+            this.isGrounded = false;
+        }
+
+        this.velocity.y -= this.gravity * delta;
+
+        // --- 3. SUB-STEP PHYSICS MOVEMENT (PREVENTS NOCLIP TUNNELING) ---
+        const steps = Math.max(1, Math.ceil(Math.abs(this.velocity.y * delta) / 0.2));
+        const subDelta = delta / steps;
+
+        for (let i = 0; i < steps; i++) {
+            this.position.x += (this.velocity.x * subDelta);
+            this.position.z += (this.velocity.z * subDelta);
+            this.position.y += (this.velocity.y * subDelta);
+
+            this.resolveCollisions();
+        }
+
+        // Void fallback safety
+        if (this.position.y <= -30) {
+            this.position.set(0, 25, 0);
+            this.velocity.set(0, 0, 0);
+        }
+
+        // --- 4. MODEL SYNC ---
+        if (this.model) {
+            this.model.position.copy(this.position);
+            this.model.rotation.y = this.yaw;
+            this.model.visible = this.isThirdPerson;
+        }
+
+        // --- 5. CAMERA UPDATE ---
+        const headPosition = new THREE.Vector3(
+            this.position.x,
+            this.position.y + this.eyeHeight,
+            this.position.z
+        );
+
+        if (this.isThirdPerson) {
+            const cameraOffset = new THREE.Vector3(0, 0, this.thirdPersonDistance);
+            const cameraEuler = new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ');
+            cameraOffset.applyEuler(cameraEuler);
+
+            this.camera.position.copy(headPosition).add(cameraOffset);
+            this.camera.lookAt(headPosition);
         } else {
-            hideMenu('mobileTouchControls');
+            this.camera.position.copy(headPosition);
+            this.camera.quaternion.setFromEuler(new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ'));
         }
-
-        if (Player) {
-            try { 
-                player = new Player(scene, camera); 
-            } catch(e) { 
-                console.error("Player initiation exception:", e); 
-            }
-        }
-
-        gameRunning = true; 
-        if (!mobileModeEnabled && canvas) canvas.requestPointerLock(); 
     }
-}
-
-// --- 6. RENDER & RESIZE LOOPS ---
-function onWindowResize() {
-    if (!camera || !renderer) return;
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-}
-
-function animate() {
-    requestAnimationFrame(animate);
-    const delta = clock.getDelta();
-
-    if (gameRunning && player && typeof player.update === 'function') {
-        player.update(delta);
-    }
-    
-    if (renderer && scene && camera) renderer.render(scene, camera);
-}
-
-// Safe bootstrap check
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-} else {
-    init();
 }
