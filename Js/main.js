@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { Player } from './player.js';
-import { MapGenerator } from '../Map/mapgenerator.js';
+import { MapGenerator } from '../Map/mapGenerator.js';
 
-// --- 1. UI NAVIGATION SYSTEM ---
+// --- 1. ROBUST UI MANAGER ---
 const panels = {
     title: document.getElementById('menu-title'),
     worlds: document.getElementById('menu-worlds'),
@@ -20,31 +20,33 @@ function showScreen(screenKey) {
     }
 }
 
-// Attach listeners for main title menu buttons
-document.getElementById('btn-worlds')?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    showScreen('worlds');
-});
+// Function to attach click listeners safely to multiple possible button IDs
+function bindClick(selector, callback) {
+    const el = document.querySelector(selector);
+    if (el) {
+        el.addEventListener('click', (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            callback(e);
+        });
+    }
+}
 
-document.getElementById('btn-skin')?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    showScreen('skin');
-});
+// Bind Title Buttons
+bindClick('#btn-worlds, #worlds-btn', () => showScreen('worlds'));
+bindClick('#btn-skin, #select-skin-btn', () => showScreen('skin'));
+bindClick('#btn-settings, #settings-btn', () => showScreen('settings'));
 
-document.getElementById('btn-settings')?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    showScreen('settings');
-});
-
-// Back buttons listener
+// Bind Back Buttons
 document.querySelectorAll('.btn-back').forEach(btn => {
     btn.addEventListener('click', (e) => {
         e.stopPropagation();
+        e.preventDefault();
         showScreen('title');
     });
 });
 
-// --- 2. THREE.JS SCENE SETUP ---
+// --- 2. THREE.JS ENGINE SETUP ---
 let gameStarted = false;
 let player = null;
 let mapGenerator = null;
@@ -58,35 +60,34 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 document.body.appendChild(renderer.domElement);
 
-const light = new THREE.DirectionalLight(0xffffff, 1);
-light.position.set(30, 50, 30);
-light.castShadow = true;
-scene.add(light);
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+dirLight.position.set(30, 50, 30);
+dirLight.castShadow = true;
+scene.add(dirLight);
 scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 
-// --- 3. LAUNCH GAME & GENERATE SEEDED TERRAIN ---
-function startGame() {
+// --- 3. GAME START LOGIC ---
+function launchGame() {
     if (!gameStarted) {
-        // Initialize Map Generator with Seed
-        const randomSeed = `seed_${Math.floor(Math.random() * 100000)}`;
-        mapGenerator = new MapGenerator(scene, randomSeed);
-        mapGenerator.generate();
+        try {
+            const seed = `seed_${Math.floor(Math.random() * 100000)}`;
+            mapGenerator = new MapGenerator(scene, seed);
+            mapGenerator.generate();
 
-        // Initialize Player with reference to mapGenerator
-        player = new Player(scene, camera, mapGenerator);
-        gameStarted = true;
+            player = new Player(scene, camera, mapGenerator);
+            gameStarted = true;
+        } catch (err) {
+            console.error("Error launching game engine:", err);
+        }
     }
 
     document.getElementById('ui-overlay')?.classList.add('hidden');
     renderer.domElement.requestPointerLock();
 }
 
-document.getElementById('btn-play-world')?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    startGame();
-});
+bindClick('#btn-play-world', launchGame);
 
-// Escape key menu toggle
+// Escape Key Handler (ESC returns to title)
 document.addEventListener('pointerlockchange', () => {
     if (document.pointerLockElement !== renderer.domElement) {
         document.getElementById('ui-overlay')?.classList.remove('hidden');
@@ -96,14 +97,14 @@ document.addEventListener('pointerlockchange', () => {
     }
 });
 
-// Lock mouse pointer on game canvas click
+// Canvas click re-locks pointer while playing
 renderer.domElement.addEventListener('click', () => {
     if (gameStarted && document.pointerLockElement !== renderer.domElement) {
         renderer.domElement.requestPointerLock();
     }
 });
 
-// --- 4. CONTROLS FOR BREAKING & PLACING BLOCKS ---
+// --- 4. BLOCK CONTROLS ---
 window.addEventListener('contextmenu', (e) => e.preventDefault());
 
 window.addEventListener('mousedown', (e) => {
@@ -112,11 +113,9 @@ window.addEventListener('mousedown', (e) => {
     const target = player.getLookAtBlock();
     if (!target) return;
 
-    if (e.button === 0) {
-        // Left Click -> Destroy Block
+    if (e.button === 0) { // Left Click -> Destroy
         mapGenerator.removeBlock(target.targetBlock.x, target.targetBlock.y, target.targetBlock.z);
-    } else if (e.button === 2) {
-        // Right Click -> Place Grass Block
+    } else if (e.button === 2) { // Right Click -> Place
         mapGenerator.addBlock(
             target.placeBlock.x, 
             target.placeBlock.y, 
@@ -126,16 +125,15 @@ window.addEventListener('mousedown', (e) => {
     }
 });
 
-// Resize Event
+// Resize
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// --- 5. RENDER LOOP ---
+// Render Loop
 const clock = new THREE.Clock();
-
 function animate() {
     requestAnimationFrame(animate);
     const delta = Math.min(clock.getDelta(), 0.1);
@@ -143,9 +141,8 @@ function animate() {
     if (gameStarted && player) {
         player.update(delta);
     } else {
-        // Menu Background Orbit Camera View
-        const t = clock.getElapsedTime() * 0.15;
-        camera.position.set(Math.sin(t) * 25, 18, Math.cos(t) * 25);
+        const time = clock.getElapsedTime() * 0.15;
+        camera.position.set(Math.sin(time) * 25, 18, Math.cos(time) * 25);
         camera.lookAt(0, 2, 0);
     }
 
