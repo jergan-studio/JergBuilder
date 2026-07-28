@@ -38,12 +38,12 @@
             align-items: center;
             justify-content: center;
             z-index: 9999;
-            pointer-events: none;
+            pointer-events: none; /* Allows canvas interactions underneath */
         }
 
         /* MENU PANELS */
         .menu-panel {
-            pointer-events: auto;
+            pointer-events: auto; /* Enables mouse clicks on buttons */
             display: flex;
             flex-direction: column;
             gap: 14px;
