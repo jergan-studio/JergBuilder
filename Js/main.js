@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Player } from './player.js';
 import { MapGenerator } from '../Map/mapGenerator.js';
 
-// --- 1. ROBUST UI MANAGER ---
+// --- 1. UI MANAGER ---
 const panels = {
     title: document.getElementById('menu-title'),
     worlds: document.getElementById('menu-worlds'),
@@ -20,7 +20,6 @@ function showScreen(screenKey) {
     }
 }
 
-// Function to attach click listeners safely to multiple possible button IDs
 function bindClick(selector, callback) {
     const el = document.querySelector(selector);
     if (el) {
@@ -32,12 +31,10 @@ function bindClick(selector, callback) {
     }
 }
 
-// Bind Title Buttons
-bindClick('#btn-worlds, #worlds-btn', () => showScreen('worlds'));
-bindClick('#btn-skin, #select-skin-btn', () => showScreen('skin'));
-bindClick('#btn-settings, #settings-btn', () => showScreen('settings'));
+bindClick('#btn-worlds', () => showScreen('worlds'));
+bindClick('#btn-skin', () => showScreen('skin'));
+bindClick('#btn-settings', () => showScreen('settings'));
 
-// Bind Back Buttons
 document.querySelectorAll('.btn-back').forEach(btn => {
     btn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -46,7 +43,69 @@ document.querySelectorAll('.btn-back').forEach(btn => {
     });
 });
 
-// --- 2. THREE.JS ENGINE SETUP ---
+// --- 2. INVENTORY & HOTBAR SYSTEM ---
+const blockInventory = [
+    { name: 'Grass', key: 'grass', color: '#557a2b' },
+    { name: 'Gray', key: 'gray', color: '#808080' },
+    { name: 'Blue', key: 'blue', color: '#1e90ff' },
+    { name: 'Red', key: 'red', color: '#ff3333' },
+    { name: 'Pink', key: 'pink', color: '#ff69b4' },
+    { name: 'Green', key: 'green', color: '#2e8b57' },
+    { name: 'Lime', key: 'lime', color: '#32cd32' },
+    { name: 'Yellow', key: 'yellow', color: '#ffd700' }
+];
+
+let selectedSlotIndex = 0;
+
+function createHotbarUI() {
+    const hotbarEl = document.getElementById('hotbar');
+    if (!hotbarEl) return;
+    hotbarEl.innerHTML = '';
+
+    blockInventory.forEach((item, index) => {
+        const slot = document.createElement('div');
+        slot.className = `hotbar-slot ${index === selectedSlotIndex ? 'active' : ''}`;
+        
+        const num = document.createElement('span');
+        num.className = 'hotbar-number';
+        num.innerText = index + 1;
+
+        const colorBox = document.createElement('div');
+        colorBox.className = 'hotbar-color-preview';
+        colorBox.style.backgroundColor = item.color;
+
+        slot.appendChild(num);
+        slot.appendChild(colorBox);
+        hotbarEl.appendChild(slot);
+    });
+}
+
+function selectSlot(index) {
+    if (index >= 0 && index < blockInventory.length) {
+        selectedSlotIndex = index;
+        createHotbarUI();
+    }
+}
+
+// Hotkey listeners (1-8 & scroll wheel)
+window.addEventListener('keydown', (e) => {
+    const num = parseInt(e.key);
+    if (!isNaN(num) && num >= 1 && num <= blockInventory.length) {
+        selectSlot(num - 1);
+    }
+});
+
+window.addEventListener('wheel', (e) => {
+    if (document.pointerLockElement === renderer.domElement) {
+        if (e.deltaY > 0) {
+            selectSlot((selectedSlotIndex + 1) % blockInventory.length);
+        } else {
+            selectSlot((selectedSlotIndex - 1 + blockInventory.length) % blockInventory.length);
+        }
+    }
+});
+
+// --- 3. THREE.JS ENGINE SETUP ---
 let gameStarted = false;
 let player = null;
 let mapGenerator = null;
@@ -66,19 +125,17 @@ dirLight.castShadow = true;
 scene.add(dirLight);
 scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 
-// --- 3. GAME START LOGIC ---
+createHotbarUI();
+
+// --- 4. GAME START LOGIC ---
 function launchGame() {
     if (!gameStarted) {
-        try {
-            const seed = `seed_${Math.floor(Math.random() * 100000)}`;
-            mapGenerator = new MapGenerator(scene, seed);
-            mapGenerator.generate();
+        const seed = `seed_${Math.floor(Math.random() * 100000)}`;
+        mapGenerator = new MapGenerator(scene, seed);
+        mapGenerator.generate();
 
-            player = new Player(scene, camera, mapGenerator);
-            gameStarted = true;
-        } catch (err) {
-            console.error("Error launching game engine:", err);
-        }
+        player = new Player(scene, camera, mapGenerator);
+        gameStarted = true;
     }
 
     document.getElementById('ui-overlay')?.classList.add('hidden');
@@ -87,7 +144,6 @@ function launchGame() {
 
 bindClick('#btn-play-world', launchGame);
 
-// Escape Key Handler (ESC returns to title)
 document.addEventListener('pointerlockchange', () => {
     if (document.pointerLockElement !== renderer.domElement) {
         document.getElementById('ui-overlay')?.classList.remove('hidden');
@@ -97,14 +153,13 @@ document.addEventListener('pointerlockchange', () => {
     }
 });
 
-// Canvas click re-locks pointer while playing
 renderer.domElement.addEventListener('click', () => {
     if (gameStarted && document.pointerLockElement !== renderer.domElement) {
         renderer.domElement.requestPointerLock();
     }
 });
 
-// --- 4. BLOCK CONTROLS ---
+// --- 5. BLOCK ACTION CONTROLS ---
 window.addEventListener('contextmenu', (e) => e.preventDefault());
 
 window.addEventListener('mousedown', (e) => {
@@ -113,19 +168,22 @@ window.addEventListener('mousedown', (e) => {
     const target = player.getLookAtBlock();
     if (!target) return;
 
-    if (e.button === 0) { // Left Click -> Destroy
+    if (e.button === 0) { // Left Click -> Break Block
         mapGenerator.removeBlock(target.targetBlock.x, target.targetBlock.y, target.targetBlock.z);
-    } else if (e.button === 2) { // Right Click -> Place
+    } else if (e.button === 2) { // Right Click -> Place Active Selected Block
+        const activeKey = blockInventory[selectedSlotIndex].key;
+        const selectedMaterial = mapGenerator.materials[activeKey] || mapGenerator.materials.grass;
+
         mapGenerator.addBlock(
             target.placeBlock.x, 
             target.placeBlock.y, 
             target.placeBlock.z, 
-            mapGenerator.materials.grass
+            selectedMaterial
         );
     }
 });
 
-// Resize
+// Resize Handler
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
