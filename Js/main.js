@@ -1,40 +1,61 @@
 import * as THREE from 'three';
 import { Player } from './player.js';
 
-// --- UI PANEL MANAGER ---
+// --- 1. UI NAVIGATION & PANEL STATE ---
 const panels = {
-    title: document.getElementById('menu-title'),
+    title: document.getElementById('menu-title') || document.getElementById('title-overlay'),
     worlds: document.getElementById('menu-worlds'),
     skin: document.getElementById('menu-skin'),
     settings: document.getElementById('menu-settings')
 };
 
 function showScreen(screenKey) {
-    Object.values(panels).forEach(p => p?.classList.add('hidden'));
-    if (panels[screenKey]) panels[screenKey].classList.remove('hidden');
+    // Hide all UI panels
+    Object.values(panels).forEach(panel => {
+        if (panel) panel.classList.add('hidden');
+    });
+
+    // Show the targeted panel
+    if (panels[screenKey]) {
+        panels[screenKey].classList.remove('hidden');
+    }
 }
 
-// Attach UI Event Listeners
+// Hook up Title Menu Buttons
+document.getElementById('worlds-btn')?.addEventListener('click', () => showScreen('worlds'));
 document.getElementById('btn-worlds')?.addEventListener('click', () => showScreen('worlds'));
+
+document.getElementById('select-skin-btn')?.addEventListener('click', () => showScreen('skin'));
 document.getElementById('btn-skin')?.addEventListener('click', () => showScreen('skin'));
+
+document.getElementById('settings-btn')?.addEventListener('click', () => showScreen('settings'));
 document.getElementById('btn-settings')?.addEventListener('click', () => showScreen('settings'));
+
+// Hook up all "Back" buttons across menus
 document.querySelectorAll('.btn-back').forEach(btn => {
     btn.addEventListener('click', () => showScreen('title'));
 });
 
-// --- THREE.JS SCENE SETUP ---
+// --- 2. THREE.JS SCENE SETUP ---
 let gameStarted = false;
 let player = null;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
 
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+const camera = new THREE.PerspectiveCamera(
+    75,
+    window.innerWidth / window.innerHeight,
+    0.1,
+    1000
+);
+
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 document.body.appendChild(renderer.domElement);
 
+// Lights
 const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
 dirLight.position.set(30, 50, 30);
 dirLight.castShadow = true;
@@ -43,9 +64,10 @@ scene.add(dirLight);
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
 scene.add(ambientLight);
 
-// Block Map & Terrain Generation
+// --- 3. TERRAIN & BLOCK MANAGEMENT ---
 const worldBlocks = [];
 const blockMap = new Map();
+
 const blockGeometry = new THREE.BoxGeometry(1, 1, 1);
 const grassMaterial = new THREE.MeshLambertMaterial({ color: 0x557a2b });
 const dirtMaterial = new THREE.MeshLambertMaterial({ color: 0x5c4033 });
@@ -70,8 +92,8 @@ function removeBlock(x, y, z) {
     const block = blockMap.get(key);
     if (block) {
         scene.remove(block);
-        const idx = worldBlocks.indexOf(block);
-        if (idx !== -1) worldBlocks.splice(idx, 1);
+        const index = worldBlocks.indexOf(block);
+        if (index !== -1) worldBlocks.splice(index, 1);
         block.geometry.dispose();
         blockMap.delete(key);
     }
@@ -88,7 +110,7 @@ function generateTerrain() {
     }
 }
 
-// --- LAUNCH GAME ---
+// --- 4. GAME LAUNCH LOGIC ---
 function launchGame() {
     if (!gameStarted) {
         generateTerrain();
@@ -96,18 +118,23 @@ function launchGame() {
         gameStarted = true;
     }
 
-    document.getElementById('ui-overlay')?.classList.add('hidden');
+    // Hide UI overlay and lock mouse
+    const uiOverlay = document.getElementById('ui-overlay');
+    if (uiOverlay) uiOverlay.classList.add('hidden');
     renderer.domElement.requestPointerLock();
 }
 
+// Play World Trigger
 document.getElementById('btn-play-world')?.addEventListener('click', launchGame);
 
+// Pointer Lock / Escape Key Menu Toggle
 document.addEventListener('pointerlockchange', () => {
+    const uiOverlay = document.getElementById('ui-overlay');
     if (document.pointerLockElement !== renderer.domElement) {
-        document.getElementById('ui-overlay')?.classList.remove('hidden');
+        if (uiOverlay) uiOverlay.classList.remove('hidden');
         showScreen('title');
     } else {
-        document.getElementById('ui-overlay')?.classList.add('hidden');
+        if (uiOverlay) uiOverlay.classList.add('hidden');
     }
 });
 
@@ -117,8 +144,9 @@ renderer.domElement.addEventListener('click', () => {
     }
 });
 
-// Mouse actions for block placement and destruction
+// --- 5. CONTROLS FOR BLOCK BREAKING / PLACING ---
 window.addEventListener('contextmenu', (e) => e.preventDefault());
+
 window.addEventListener('mousedown', (e) => {
     if (!gameStarted || document.pointerLockElement !== renderer.domElement || !player) return;
 
@@ -126,34 +154,7 @@ window.addEventListener('mousedown', (e) => {
     if (!target) return;
 
     if (e.button === 0) {
+        // Left Click -> Break Block
         removeBlock(target.targetBlock.x, target.targetBlock.y, target.targetBlock.z);
     } else if (e.button === 2) {
-        createBlock(target.placeBlock.x, target.placeBlock.y, target.placeBlock.z, grassMaterial);
-    }
-});
-
-window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-});
-
-// Main Loop
-const clock = new THREE.Clock();
-function animate() {
-    requestAnimationFrame(animate);
-    const delta = Math.min(clock.getDelta(), 0.1);
-
-    if (gameStarted && player) {
-        player.update(delta);
-    } else {
-        const time = clock.getElapsedTime() * 0.15;
-        camera.position.x = Math.sin(time) * 35;
-        camera.position.z = Math.cos(time) * 35;
-        camera.position.y = 20;
-        camera.lookAt(0, 3, 0);
-    }
-
-    renderer.render(scene, camera);
-}
-animate();
+        // Right Click -> Place
