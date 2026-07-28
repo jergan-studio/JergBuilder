@@ -1,9 +1,5 @@
 import * as THREE from 'three';
 
-/**
- * Seedable Pseudo-Random Number Generator (PRNG)
- * Uses a linear congruential generator (LCG) to generate deterministic values based on seed.
- */
 class SeededRandom {
     constructor(seed = Math.random()) {
         this.setSeed(seed);
@@ -21,16 +17,12 @@ class SeededRandom {
         }
     }
 
-    // Returns float between 0 and 1
     next() {
         this.seed = (this.seed * 9301 + 49297) % 233280;
         return this.seed / 233280;
     }
 }
 
-/**
- * Simple 2D Perlin/Value Noise Generator driven by Seed
- */
 class FastNoise {
     constructor(prng) {
         this.prng = prng;
@@ -42,7 +34,6 @@ class FastNoise {
         const p = new Uint8Array(256);
         for (let i = 0; i < 256; i++) p[i] = i;
         
-        // Shuffle using PRNG
         for (let i = 255; i > 0; i--) {
             const j = Math.floor(this.prng.next() * (i + 1));
             const temp = p[i];
@@ -55,21 +46,14 @@ class FastNoise {
         }
     }
 
-    fade(t) {
-        return t * t * t * (t * (t * 6 - 15) + 10);
-    }
-
-    lerp(t, a, b) {
-        return a + t * (b - a);
-    }
+    fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+    lerp(t, a, b) { return a + t * (b - a); }
 
     get2D(x, y) {
         const X = Math.floor(x) & 255;
         const Y = Math.floor(y) & 255;
-
         const xf = x - Math.floor(x);
         const yf = y - Math.floor(y);
-
         const u = this.fade(xf);
         const v = this.fade(yf);
 
@@ -86,10 +70,10 @@ class FastNoise {
 }
 
 export class MapGenerator {
-    constructor(scene, seed = 'JergBuilder_Default_Seed') {
+    constructor(scene, seed = 'JergBuilder_Default') {
         this.scene = scene;
         this.seed = seed;
-        this.mapSize = 24; // 24x24 chunk size
+        this.mapSize = 24;
         
         this.prng = new SeededRandom(this.seed);
         this.noise = new FastNoise(this.prng);
@@ -101,64 +85,53 @@ export class MapGenerator {
         this.blockMap = new Map();
     }
 
-    // Set up textures using your Grass texture URL
     initMaterials() {
         const textureLoader = new THREE.TextureLoader();
 
-        // High-quality nearest pixel filtering for voxel style
+        // Use direct CORS-friendly RAW URL or local relative path
         const grassTexture = textureLoader.load(
-            'https://github.com/jergan-studio/JergBuilder/blob/main/Assets/Grass.png?raw=true',
+            'https://raw.githubusercontent.com/jergan-studio/JergBuilder/main/Assets/Grass.png',
             (tex) => {
                 tex.magFilter = THREE.NearestFilter;
                 tex.minFilter = THREE.NearestFilter;
-            }
+            },
+            undefined,
+            (err) => console.warn('Texture failed to load, falling back to color material.', err)
         );
 
-        const grassMat = new THREE.MeshLambertMaterial({ map: grassTexture });
+        const grassMat = new THREE.MeshLambertMaterial({ map: grassTexture, color: 0x557a2b });
         const dirtMat = new THREE.MeshLambertMaterial({ color: 0x5c4033 });
         const stoneMat = new THREE.MeshLambertMaterial({ color: 0x777777 });
 
-        return {
-            grass: grassMat,
-            dirt: dirtMat,
-            stone: stoneMat
-        };
+        return { grass: grassMat, dirt: dirtMat, stone: stoneMat };
     }
 
-    // Change seed and regenerate map
     setSeed(newSeed) {
         this.seed = newSeed;
         this.prng.setSeed(newSeed);
         this.noise = new FastNoise(this.prng);
     }
 
-    // Generate terrain based on seed noise
     generate(seedOverride = null) {
-        if (seedOverride !== null) {
-            this.setSeed(seedOverride);
-        }
+        if (seedOverride !== null) this.setSeed(seedOverride);
 
         this.clearMap();
-
         const halfSize = Math.floor(this.mapSize / 2);
 
         for (let x = -halfSize; x < halfSize; x++) {
             for (let z = -halfSize; z < halfSize; z++) {
-                // Perlin Noise height calculation
                 const nx = x * 0.08;
                 const nz = z * 0.08;
                 const rawHeight = this.noise.get2D(nx + 100, nz + 100);
-                
-                // Map height to range [2, 10]
                 const maxTerrainHeight = Math.floor(rawHeight * 8) + 2;
 
                 for (let y = 0; y <= maxTerrainHeight; y++) {
                     let mat = this.materials.stone;
 
                     if (y === maxTerrainHeight) {
-                        mat = this.materials.grass; // Top layer is Grass Texture
+                        mat = this.materials.grass;
                     } else if (y >= maxTerrainHeight - 2) {
-                        mat = this.materials.dirt; // Dirt layer
+                        mat = this.materials.dirt;
                     }
 
                     this.addBlock(x, y, z, mat);
@@ -166,7 +139,6 @@ export class MapGenerator {
             }
         }
 
-        console.log(`Map generated with seed: "${this.seed}" (${this.worldBlocks.length} blocks)`);
         return this.worldBlocks;
     }
 
@@ -198,9 +170,7 @@ export class MapGenerator {
     }
 
     clearMap() {
-        this.worldBlocks.forEach(block => {
-            this.scene.remove(block);
-        });
+        this.worldBlocks.forEach(block => this.scene.remove(block));
         this.worldBlocks = [];
         this.blockMap.clear();
     }
