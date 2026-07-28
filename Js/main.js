@@ -1,8 +1,7 @@
 import * as THREE from 'three';
 import { Player } from './player.js';
-import { MapGenerator } from './mapGenerator.js';
 
-// --- 1. UI NAVIGATION MANAGER ---
+// --- UI PANEL MANAGER ---
 const panels = {
     title: document.getElementById('menu-title'),
     worlds: document.getElementById('menu-worlds'),
@@ -11,31 +10,21 @@ const panels = {
 };
 
 function showScreen(screenKey) {
-    // Hide all panels
-    Object.values(panels).forEach(panel => {
-        if (panel) panel.classList.add('hidden');
-    });
-
-    // Show selected panel
-    if (panels[screenKey]) {
-        panels[screenKey].classList.remove('hidden');
-    }
+    Object.values(panels).forEach(p => p?.classList.add('hidden'));
+    if (panels[screenKey]) panels[screenKey].classList.remove('hidden');
 }
 
-// Hook up Title Screen buttons
+// Attach UI Event Listeners
 document.getElementById('btn-worlds')?.addEventListener('click', () => showScreen('worlds'));
 document.getElementById('btn-skin')?.addEventListener('click', () => showScreen('skin'));
 document.getElementById('btn-settings')?.addEventListener('click', () => showScreen('settings'));
-
-// Hook up all "Back" buttons
 document.querySelectorAll('.btn-back').forEach(btn => {
     btn.addEventListener('click', () => showScreen('title'));
 });
 
-// --- 2. THREE.JS GAME SETUP ---
+// --- THREE.JS SCENE SETUP ---
 let gameStarted = false;
 let player = null;
-let mapGenerator = null;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
@@ -48,51 +37,87 @@ document.body.appendChild(renderer.domElement);
 
 const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
 dirLight.position.set(30, 50, 30);
+dirLight.castShadow = true;
 scene.add(dirLight);
-scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 
-// Launch World
-function launchGame() {
-    if (!mapGenerator) {
-        mapGenerator = new MapGenerator(scene);
-        if (typeof mapGenerator.generate === 'function') {
-            mapGenerator.generate();
-        }
-    }
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+scene.add(ambientLight);
 
-    if (!player) {
-        player = new Player(scene, camera, mapGenerator);
-    }
+// Block Map & Terrain Generation
+const worldBlocks = [];
+const blockMap = new Map();
+const blockGeometry = new THREE.BoxGeometry(1, 1, 1);
+const grassMaterial = new THREE.MeshLambertMaterial({ color: 0x557a2b });
+const dirtMaterial = new THREE.MeshLambertMaterial({ color: 0x5c4033 });
+const stoneMaterial = new THREE.MeshLambertMaterial({ color: 0x808080 });
 
-    // Hide UI Overlay
-    document.getElementById('ui-overlay').classList.add('hidden');
-    renderer.domElement.requestPointerLock();
-    gameStarted = true;
+function createBlock(x, y, z, material = grassMaterial) {
+    const key = `${x},${y},${z}`;
+    if (blockMap.has(key)) return;
+
+    const block = new THREE.Mesh(blockGeometry, material);
+    block.position.set(x + 0.5, y + 0.5, z + 0.5);
+    block.castShadow = true;
+    block.receiveShadow = true;
+
+    scene.add(block);
+    worldBlocks.push(block);
+    blockMap.set(key, block);
 }
 
-// Play World Button Listener
-document.getElementById('btn-play-world')?.addEventListener('click', () => {
-    launchGame();
-});
+function removeBlock(x, y, z) {
+    const key = `${x},${y},${z}`;
+    const block = blockMap.get(key);
+    if (block) {
+        scene.remove(block);
+        const idx = worldBlocks.indexOf(block);
+        if (idx !== -1) worldBlocks.splice(idx, 1);
+        block.geometry.dispose();
+        blockMap.delete(key);
+    }
+}
 
-// Press ESC to return to Title Menu
+function generateTerrain() {
+    const size = 16;
+    for (let x = -size; x < size; x++) {
+        for (let z = -size; z < size; z++) {
+            createBlock(x, 0, z, stoneMaterial);
+            createBlock(x, 1, z, dirtMaterial);
+            createBlock(x, 2, z, grassMaterial);
+        }
+    }
+}
+
+// --- LAUNCH GAME ---
+function launchGame() {
+    if (!gameStarted) {
+        generateTerrain();
+        player = new Player(scene, camera, worldBlocks);
+        gameStarted = true;
+    }
+
+    document.getElementById('ui-overlay')?.classList.add('hidden');
+    renderer.domElement.requestPointerLock();
+}
+
+document.getElementById('btn-play-world')?.addEventListener('click', launchGame);
+
 document.addEventListener('pointerlockchange', () => {
     if (document.pointerLockElement !== renderer.domElement) {
-        document.getElementById('ui-overlay').classList.remove('hidden');
+        document.getElementById('ui-overlay')?.classList.remove('hidden');
         showScreen('title');
     } else {
-        document.getElementById('ui-overlay').classList.add('hidden');
+        document.getElementById('ui-overlay')?.classList.add('hidden');
     }
 });
 
-// Click Canvas to Lock Pointer if Game is running
 renderer.domElement.addEventListener('click', () => {
     if (gameStarted && document.pointerLockElement !== renderer.domElement) {
         renderer.domElement.requestPointerLock();
     }
 });
 
-// Block Place/Break Controls
+// Mouse actions for block placement and destruction
 window.addEventListener('contextmenu', (e) => e.preventDefault());
 window.addEventListener('mousedown', (e) => {
     if (!gameStarted || document.pointerLockElement !== renderer.domElement || !player) return;
@@ -100,21 +125,20 @@ window.addEventListener('mousedown', (e) => {
     const target = player.getLookAtBlock();
     if (!target) return;
 
-    if (e.button === 0 && mapGenerator?.removeBlock) {
-        mapGenerator.removeBlock(target.targetBlock.x, target.targetBlock.y, target.targetBlock.z);
-    } else if (e.button === 2 && mapGenerator?.addBlock) {
-        mapGenerator.addBlock(target.placeBlock.x, target.placeBlock.y, target.placeBlock.z, 1);
+    if (e.button === 0) {
+        removeBlock(target.targetBlock.x, target.targetBlock.y, target.targetBlock.z);
+    } else if (e.button === 2) {
+        createBlock(target.placeBlock.x, target.placeBlock.y, target.placeBlock.z, grassMaterial);
     }
 });
 
-// Window Resize
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// Render Loop
+// Main Loop
 const clock = new THREE.Clock();
 function animate() {
     requestAnimationFrame(animate);
@@ -123,12 +147,11 @@ function animate() {
     if (gameStarted && player) {
         player.update(delta);
     } else {
-        // Orbit Camera View while on Menu
         const time = clock.getElapsedTime() * 0.15;
         camera.position.x = Math.sin(time) * 35;
         camera.position.z = Math.cos(time) * 35;
-        camera.position.y = 25;
-        camera.lookAt(0, 5, 0);
+        camera.position.y = 20;
+        camera.lookAt(0, 3, 0);
     }
 
     renderer.render(scene, camera);
