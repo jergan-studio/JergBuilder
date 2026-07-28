@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Player } from './player.js';
 import { MapGenerator } from '../Map/mapGenerator.js';
 
-// --- 1. UI MANAGER ---
+// --- 1. UI NAVIGATION MANAGER ---
 const panels = {
     title: document.getElementById('menu-title'),
     worlds: document.getElementById('menu-worlds'),
@@ -43,7 +43,21 @@ document.querySelectorAll('.btn-back').forEach(btn => {
     });
 });
 
-// --- 2. INVENTORY & HOTBAR SYSTEM ---
+// --- 2. BACKGROUND MUSIC SYSTEM ---
+const bgMusic = new Audio('https://github.com/jergan-studio/JergBuilder/raw/refs/heads/main/Assets/monume-roblox-minecraft-fortnite-video-game-music-498036.mp3');
+bgMusic.loop = true;
+bgMusic.volume = 0.3;
+
+function playMusic() {
+    bgMusic.play().catch(err => {
+        console.log("Audio waiting for user click interaction:", err);
+    });
+}
+
+// Start playing music on the first user click
+window.addEventListener('click', () => playMusic(), { once: true });
+
+// --- 3. INVENTORY & HOTBAR SYSTEM ---
 const blockInventory = [
     { name: 'Grass', key: 'grass', color: '#557a2b' },
     { name: 'Gray', key: 'gray', color: '#808080' },
@@ -87,7 +101,7 @@ function selectSlot(index) {
     }
 }
 
-// Hotkey listeners (1-8 & scroll wheel)
+// Keyboard (1-8) and Mouse Wheel slot selection
 window.addEventListener('keydown', (e) => {
     const num = parseInt(e.key);
     if (!isNaN(num) && num >= 1 && num <= blockInventory.length) {
@@ -105,7 +119,7 @@ window.addEventListener('wheel', (e) => {
     }
 });
 
-// --- 3. THREE.JS ENGINE SETUP ---
+// --- 4. THREE.JS ENGINE & SCENE SETUP ---
 let gameStarted = false;
 let player = null;
 let mapGenerator = null;
@@ -127,84 +141,11 @@ scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 
 createHotbarUI();
 
-// --- 4. GAME START LOGIC ---
+// --- 5. LAUNCH GAME & POINTER LOCK ---
 function launchGame() {
+    playMusic();
+
     if (!gameStarted) {
         const seed = `seed_${Math.floor(Math.random() * 100000)}`;
         mapGenerator = new MapGenerator(scene, seed);
         mapGenerator.generate();
-
-        player = new Player(scene, camera, mapGenerator);
-        gameStarted = true;
-    }
-
-    document.getElementById('ui-overlay')?.classList.add('hidden');
-    renderer.domElement.requestPointerLock();
-}
-
-bindClick('#btn-play-world', launchGame);
-
-document.addEventListener('pointerlockchange', () => {
-    if (document.pointerLockElement !== renderer.domElement) {
-        document.getElementById('ui-overlay')?.classList.remove('hidden');
-        showScreen('title');
-    } else {
-        document.getElementById('ui-overlay')?.classList.add('hidden');
-    }
-});
-
-renderer.domElement.addEventListener('click', () => {
-    if (gameStarted && document.pointerLockElement !== renderer.domElement) {
-        renderer.domElement.requestPointerLock();
-    }
-});
-
-// --- 5. BLOCK ACTION CONTROLS ---
-window.addEventListener('contextmenu', (e) => e.preventDefault());
-
-window.addEventListener('mousedown', (e) => {
-    if (!gameStarted || document.pointerLockElement !== renderer.domElement || !player || !mapGenerator) return;
-
-    const target = player.getLookAtBlock();
-    if (!target) return;
-
-    if (e.button === 0) { // Left Click -> Break Block
-        mapGenerator.removeBlock(target.targetBlock.x, target.targetBlock.y, target.targetBlock.z);
-    } else if (e.button === 2) { // Right Click -> Place Active Selected Block
-        const activeKey = blockInventory[selectedSlotIndex].key;
-        const selectedMaterial = mapGenerator.materials[activeKey] || mapGenerator.materials.grass;
-
-        mapGenerator.addBlock(
-            target.placeBlock.x, 
-            target.placeBlock.y, 
-            target.placeBlock.z, 
-            selectedMaterial
-        );
-    }
-});
-
-// Resize Handler
-window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-});
-
-// Render Loop
-const clock = new THREE.Clock();
-function animate() {
-    requestAnimationFrame(animate);
-    const delta = Math.min(clock.getDelta(), 0.1);
-
-    if (gameStarted && player) {
-        player.update(delta);
-    } else {
-        const time = clock.getElapsedTime() * 0.15;
-        camera.position.set(Math.sin(time) * 25, 18, Math.cos(time) * 25);
-        camera.lookAt(0, 2, 0);
-    }
-
-    renderer.render(scene, camera);
-}
-
-animate();
