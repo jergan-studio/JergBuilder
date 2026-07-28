@@ -14,8 +14,8 @@
         }
 
         body, html {
-            width: 100%;
-            height: 100%;
+            width: 100vw;
+            height: 100vh;
             overflow: hidden;
             font-family: 'Courier New', Courier, monospace;
             background-color: #000;
@@ -37,24 +37,24 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            z-index: 9999; /* Higher than Three.js canvas */
-            pointer-events: none; /* Let empty space pass through */
+            z-index: 9999;
+            pointer-events: none; /* Let empty background clicks pass through */
         }
 
         /* MENU PANELS */
         .menu-panel {
-            pointer-events: auto; /* CRITICAL: Allows button clicks! */
+            pointer-events: auto; /* CRITICAL: Enables button clicks! */
             display: flex;
             flex-direction: column;
             gap: 14px;
-            background: rgba(20, 20, 20, 0.9);
+            background: rgba(20, 20, 20, 0.95);
             border: 3px solid #555;
             padding: 28px;
             border-radius: 8px;
             min-width: 300px;
             align-items: center;
             color: #fff;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.8);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
         }
 
         .menu-panel h2 {
@@ -68,7 +68,7 @@
             display: none !important;
         }
 
-        /* BUTTONS */
+        /* BUTTON STYLES */
         .menu-btn {
             width: 100%;
             padding: 12px 20px;
@@ -149,6 +149,6 @@
         </div>
     </div>
 
-    <script type="module" src="./Js/main.js"></script>
+    <script type="module" src="Js/main.js"></script>
 </body>
 </html>
