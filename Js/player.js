@@ -7,23 +7,19 @@ export class Player {
         this.camera = camera;
         this.worldBlocks = worldBlocks;
 
-        // --- 1. SIZING & SCALE ---
         this.scale = 0.5;
-        this.width = 0.6 * this.scale;     // 0.3 units wide
-        this.height = 1.8 * this.scale;    // 0.9 units tall
-        this.eyeHeight = 1.6 * this.scale; // 0.8 units eye height
+        this.width = 0.6 * this.scale;
+        this.height = 1.8 * this.scale;
+        this.eyeHeight = 1.6 * this.scale;
 
-        // Spawn position
         this.position = new THREE.Vector3(0, 20, 0);
         this.velocity = new THREE.Vector3();
 
-        // Movement Physics
         this.moveSpeed = 8;
         this.jumpForce = 10;
         this.gravity = 28;
         this.isGrounded = false;
 
-        // Camera Perspective Mode (false = 1st Person, true = 3rd Person)
         this.isThirdPerson = false;
         this.thirdPersonDistance = 4;
 
@@ -31,15 +27,11 @@ export class Player {
         this.pitch = 0;
         this.yaw = 0;
 
-        // Raycasting for block targeting / placing
         this.raycaster = new THREE.Raycaster();
         this.reachDistance = 8;
 
-        // Player Model
         this.model = null;
         this.loadPlayerModel();
-
-        this.boundingBox = new THREE.Box3();
         this.setupControls();
     }
 
@@ -52,22 +44,17 @@ export class Player {
             this.model.scale.set(this.scale, this.scale, this.scale);
             this.scene.add(this.model);
             this.model.visible = this.isThirdPerson;
-        }, undefined, (error) => {
-            console.warn("Could not load player model glb:", error);
-        });
+        }, undefined, (error) => console.warn("GLB model failed to load:", error));
     }
 
     setupControls() {
         window.addEventListener('keydown', (e) => {
             this.updateKey(e.code, true);
 
-            // Toggle 3rd Person View with '['
             if (e.code === 'BracketLeft' || e.key === '[') {
                 e.preventDefault();
                 this.isThirdPerson = !this.isThirdPerson;
-                if (this.model) {
-                    this.model.visible = this.isThirdPerson;
-                }
+                if (this.model) this.model.visible = this.isThirdPerson;
             }
         });
 
@@ -92,18 +79,15 @@ export class Player {
         }
     }
 
-    // Automatically retrieves valid terrain meshes from scene or worldBlocks
     getTerrainMeshes() {
         let meshes = [];
-
         if (Array.isArray(this.worldBlocks) && this.worldBlocks.length > 0) {
             meshes = this.worldBlocks;
         } else if (this.worldBlocks && this.worldBlocks.children) {
             meshes = this.worldBlocks.children;
         } else {
-            // Search full scene for mesh terrain
             this.scene.traverse((child) => {
-                if (child.isMesh && child !== this.model && !this.isDescendantOf(child, this.model)) {
+                if (child.isMesh && child !== this.model) {
                     meshes.push(child);
                 }
             });
@@ -111,17 +95,6 @@ export class Player {
         return meshes;
     }
 
-    isDescendantOf(object, parent) {
-        if (!parent) return false;
-        let obj = object.parent;
-        while (obj) {
-            if (obj === parent) return true;
-            obj = obj.parent;
-        }
-        return false;
-    }
-
-    // --- RAYCAST TARGETING (FOR BLOCK PLACEMENT / DESTROYING) ---
     getLookAtBlock() {
         const meshes = this.getTerrainMeshes();
         if (meshes.length === 0) return null;
@@ -145,19 +118,16 @@ export class Player {
             const point = hit.point;
             const normal = hit.face ? hit.face.normal.clone() : new THREE.Vector3(0, 1, 0);
 
-            // Apply world rotation of object if transformed
             if (hit.object) {
                 normal.applyQuaternion(hit.object.getWorldQuaternion(new THREE.Quaternion()));
             }
 
-            // Target block to break
             const targetBlock = new THREE.Vector3(
                 Math.floor(point.x - normal.x * 0.4),
                 Math.floor(point.y - normal.y * 0.4),
                 Math.floor(point.z - normal.z * 0.4)
             );
 
-            // Adjacent position to place a new block
             const placeBlock = new THREE.Vector3(
                 Math.floor(point.x + normal.x * 0.4),
                 Math.floor(point.y + normal.y * 0.4),
@@ -170,15 +140,14 @@ export class Player {
         return null;
     }
 
-    // --- ROBUST COLLISION SYSTEM ---
     resolveCollisions() {
         const meshes = this.getTerrainMeshes();
         if (meshes.length === 0) return;
 
         const halfW = this.width / 2;
 
-        // 1. VERTICAL (GROUND / CEILING) COLLISION
-        const checkPoints = [
+        // Ground check
+        const footOffsets = [
             new THREE.Vector3(0, 0, 0),
             new THREE.Vector3(halfW * 0.8, 0, halfW * 0.8),
             new THREE.Vector3(-halfW * 0.8, 0, halfW * 0.8),
@@ -188,9 +157,9 @@ export class Player {
 
         let landed = false;
 
-        for (let pt of checkPoints) {
+        for (let pt of footOffsets) {
             const rayOrigin = this.position.clone().add(pt);
-            rayOrigin.y += 0.4; // Cast down starting inside lower torso
+            rayOrigin.y += 0.4;
 
             this.raycaster.set(rayOrigin, new THREE.Vector3(0, -1, 0));
             this.raycaster.far = 0.5;
@@ -207,11 +176,9 @@ export class Player {
             }
         }
 
-        if (!landed) {
-            this.isGrounded = false;
-        }
+        if (!landed) this.isGrounded = false;
 
-        // 2. HORIZONTAL WALL COLLISION (X & Z)
+        // Wall check
         const heights = [0.2, this.height * 0.5, this.height - 0.1];
         const directions = [
             new THREE.Vector3(1, 0, 0),
@@ -229,7 +196,6 @@ export class Player {
                 this.raycaster.far = halfW + 0.08;
 
                 const hits = this.raycaster.intersectObjects(meshes, true);
-
                 if (hits.length > 0) {
                     const hit = hits[0];
                     const overlap = (halfW + 0.08) - hit.distance;
@@ -240,7 +206,6 @@ export class Player {
     }
 
     update(delta) {
-        // --- 1. MOVEMENT INPUT ---
         const moveDir = new THREE.Vector3();
         if (this.keys.forward) moveDir.z -= 1;
         if (this.keys.backward) moveDir.z += 1;
@@ -248,14 +213,11 @@ export class Player {
         if (this.keys.right) moveDir.x += 1;
 
         moveDir.normalize();
-
-        const euler = new THREE.Euler(0, this.yaw, 0, 'YXZ');
-        moveDir.applyEuler(euler);
+        moveDir.applyEuler(new THREE.Euler(0, this.yaw, 0, 'YXZ'));
 
         this.velocity.x = moveDir.x * this.moveSpeed;
         this.velocity.z = moveDir.z * this.moveSpeed;
 
-        // --- 2. JUMP & GRAVITY ---
         if (this.isGrounded && this.keys.jump) {
             this.velocity.y = this.jumpForce;
             this.isGrounded = false;
@@ -263,7 +225,7 @@ export class Player {
 
         this.velocity.y -= this.gravity * delta;
 
-        // --- 3. SUB-STEP PHYSICS MOVEMENT (PREVENTS NOCLIP TUNNELING) ---
+        // Sub-stepping movement to stop tunneling
         const steps = Math.max(1, Math.ceil(Math.abs(this.velocity.y * delta) / 0.2));
         const subDelta = delta / steps;
 
@@ -275,20 +237,17 @@ export class Player {
             this.resolveCollisions();
         }
 
-        // Void fallback safety
         if (this.position.y <= -30) {
             this.position.set(0, 25, 0);
             this.velocity.set(0, 0, 0);
         }
 
-        // --- 4. MODEL SYNC ---
         if (this.model) {
             this.model.position.copy(this.position);
             this.model.rotation.y = this.yaw;
             this.model.visible = this.isThirdPerson;
         }
 
-        // --- 5. CAMERA UPDATE ---
         const headPosition = new THREE.Vector3(
             this.position.x,
             this.position.y + this.eyeHeight,
@@ -297,9 +256,7 @@ export class Player {
 
         if (this.isThirdPerson) {
             const cameraOffset = new THREE.Vector3(0, 0, this.thirdPersonDistance);
-            const cameraEuler = new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ');
-            cameraOffset.applyEuler(cameraEuler);
-
+            cameraOffset.applyEuler(new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ'));
             this.camera.position.copy(headPosition).add(cameraOffset);
             this.camera.lookAt(headPosition);
         } else {
