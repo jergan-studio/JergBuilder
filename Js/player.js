@@ -2,11 +2,12 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 export class Player {
-    constructor(scene, camera, worldBlocks = []) {
+    constructor(scene, camera, mapGenerator) {
         this.scene = scene;
         this.camera = camera;
-        this.worldBlocks = worldBlocks;
+        this.mapGenerator = mapGenerator;
 
+        // Player Physical Dimensions
         this.scale = 0.5;
         this.width = 0.6 * this.scale;
         this.height = 1.8 * this.scale;
@@ -15,11 +16,13 @@ export class Player {
         this.position = new THREE.Vector3(0, 20, 0);
         this.velocity = new THREE.Vector3();
 
+        // Movement Settings
         this.moveSpeed = 8;
         this.jumpForce = 10;
         this.gravity = 28;
         this.isGrounded = false;
 
+        // Camera / View Mode
         this.isThirdPerson = false;
         this.thirdPersonDistance = 4;
 
@@ -51,6 +54,7 @@ export class Player {
         window.addEventListener('keydown', (e) => {
             this.updateKey(e.code, true);
 
+            // Toggle Third-Person Camera with "[" key
             if (e.code === 'BracketLeft' || e.key === '[') {
                 e.preventDefault();
                 this.isThirdPerson = !this.isThirdPerson;
@@ -80,19 +84,10 @@ export class Player {
     }
 
     getTerrainMeshes() {
-        let meshes = [];
-        if (Array.isArray(this.worldBlocks) && this.worldBlocks.length > 0) {
-            meshes = this.worldBlocks;
-        } else if (this.worldBlocks && this.worldBlocks.children) {
-            meshes = this.worldBlocks.children;
-        } else {
-            this.scene.traverse((child) => {
-                if (child.isMesh && child !== this.model) {
-                    meshes.push(child);
-                }
-            });
+        if (this.mapGenerator && Array.isArray(this.mapGenerator.worldBlocks)) {
+            return this.mapGenerator.worldBlocks;
         }
-        return meshes;
+        return [];
     }
 
     getLookAtBlock() {
@@ -146,7 +141,7 @@ export class Player {
 
         const halfW = this.width / 2;
 
-        // Ground check
+        // Ground Check
         const footOffsets = [
             new THREE.Vector3(0, 0, 0),
             new THREE.Vector3(halfW * 0.8, 0, halfW * 0.8),
@@ -178,7 +173,7 @@ export class Player {
 
         if (!landed) this.isGrounded = false;
 
-        // Wall check
+        // Wall Collision Check
         const heights = [0.2, this.height * 0.5, this.height - 0.1];
         const directions = [
             new THREE.Vector3(1, 0, 0),
@@ -225,7 +220,7 @@ export class Player {
 
         this.velocity.y -= this.gravity * delta;
 
-        // Sub-stepping movement to stop tunneling
+        // Anti-tunneling physics sub-stepping
         const steps = Math.max(1, Math.ceil(Math.abs(this.velocity.y * delta) / 0.2));
         const subDelta = delta / steps;
 
@@ -237,8 +232,9 @@ export class Player {
             this.resolveCollisions();
         }
 
+        // Void Respawn
         if (this.position.y <= -30) {
-            this.position.set(0, 25, 0);
+            this.position.set(0, 20, 0);
             this.velocity.set(0, 0, 0);
         }
 
