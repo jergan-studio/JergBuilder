@@ -4,8 +4,111 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>JergBuilder</title>
-    <link rel="stylesheet" href="style.css">
     
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Courier New', Courier, monospace;
+            background-color: #000;
+        }
+
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        /* OVERLAY CONTAINER */
+        #ui-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999; /* Higher than Three.js canvas */
+            pointer-events: none; /* Let empty space pass through */
+        }
+
+        /* MENU PANELS */
+        .menu-panel {
+            pointer-events: auto; /* CRITICAL: Allows button clicks! */
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            background: rgba(20, 20, 20, 0.9);
+            border: 3px solid #555;
+            padding: 28px;
+            border-radius: 8px;
+            min-width: 300px;
+            align-items: center;
+            color: #fff;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.8);
+        }
+
+        .menu-panel h2 {
+            font-size: 22px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: #fff;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* BUTTONS */
+        .menu-btn {
+            width: 100%;
+            padding: 12px 20px;
+            background: #3c3c3c;
+            color: #ffffff;
+            border: 2px solid #666;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 16px;
+            font-weight: bold;
+            transition: background 0.15s ease;
+        }
+
+        .menu-btn:hover {
+            background: #555;
+            border-color: #fff;
+        }
+
+        /* CROSSHAIR */
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 10px;
+            height: 10px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        #crosshair::before, #crosshair::after {
+            content: '';
+            position: absolute;
+            background: rgba(255, 255, 255, 0.8);
+        }
+
+        #crosshair::before { top: 4px; left: 0; width: 10px; height: 2px; }
+        #crosshair::after { top: 0; left: 4px; width: 2px; height: 10px; }
+    </style>
+
     <script type="importmap">
       {
         "imports": {
@@ -21,31 +124,31 @@
 
     <div id="ui-overlay">
         <div id="menu-title" class="menu-panel">
-            <h1 class="title-text">JERGBUILDER</h1>
+            <h2>JergBuilder</h2>
             <button id="btn-worlds" class="menu-btn">Worlds</button>
             <button id="btn-skin" class="menu-btn">Select Skin</button>
             <button id="btn-settings" class="menu-btn">Settings</button>
         </div>
 
         <div id="menu-worlds" class="menu-panel hidden">
-            <h2>Worlds</h2>
+            <h2>Select World</h2>
             <button id="btn-play-world" class="menu-btn">Play World</button>
             <button class="menu-btn btn-back">Back</button>
         </div>
 
         <div id="menu-skin" class="menu-panel hidden">
             <h2>Select Skin</h2>
-            <p style="color: #aaa; font-size: 14px;">Default Skin Selected</p>
+            <p style="font-size: 13px; color: #aaa;">Default Skin Active</p>
             <button class="menu-btn btn-back">Back</button>
         </div>
 
         <div id="menu-settings" class="menu-panel hidden">
             <h2>Settings</h2>
-            <p style="color: #aaa; font-size: 14px;">FOV: 75 | Sensitivity: 1.0</p>
+            <p style="font-size: 13px; color: #aaa;">FOV: 75 | Sensitivity: 1.0</p>
             <button class="menu-btn btn-back">Back</button>
         </div>
     </div>
 
-    <script type="module" src="Js/main.js"></script>
+    <script type="module" src="./Js/main.js"></script>
 </body>
 </html>
