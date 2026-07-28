@@ -50,11 +50,11 @@ bgMusic.volume = 0.3;
 
 function playMusic() {
     bgMusic.play().catch(err => {
-        console.log("Audio waiting for user click interaction:", err);
+        console.log("Audio awaiting user interaction:", err);
     });
 }
 
-// Start playing music on the first user click
+// Play audio on first user click anywhere
 window.addEventListener('click', () => playMusic(), { once: true });
 
 // --- 3. INVENTORY & HOTBAR SYSTEM ---
@@ -101,7 +101,7 @@ function selectSlot(index) {
     }
 }
 
-// Keyboard (1-8) and Mouse Wheel slot selection
+// Key listeners (1-8) and mouse scroll wheel
 window.addEventListener('keydown', (e) => {
     const num = parseInt(e.key);
     if (!isNaN(num) && num >= 1 && num <= blockInventory.length) {
@@ -119,7 +119,7 @@ window.addEventListener('wheel', (e) => {
     }
 });
 
-// --- 4. THREE.JS ENGINE & SCENE SETUP ---
+// --- 4. THREE.JS SCENE SETUP ---
 let gameStarted = false;
 let player = null;
 let mapGenerator = null;
@@ -141,11 +141,92 @@ scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 
 createHotbarUI();
 
-// --- 5. LAUNCH GAME & POINTER LOCK ---
+// --- 5. GAME LAUNCH & POINTER LOCK ---
 function launchGame() {
     playMusic();
 
     if (!gameStarted) {
-        const seed = `seed_${Math.floor(Math.random() * 100000)}`;
-        mapGenerator = new MapGenerator(scene, seed);
-        mapGenerator.generate();
+        try {
+            const seed = `seed_${Math.floor(Math.random() * 100000)}`;
+            mapGenerator = new MapGenerator(scene, seed);
+            mapGenerator.generate();
+
+            player = new Player(scene, camera, mapGenerator);
+            gameStarted = true;
+        } catch (err) {
+            console.error("Game launch error:", err);
+        }
+    }
+
+    document.getElementById('ui-overlay')?.classList.add('hidden');
+    renderer.domElement.requestPointerLock();
+}
+
+bindClick('#btn-play-world', launchGame);
+
+document.addEventListener('pointerlockchange', () => {
+    if (document.pointerLockElement !== renderer.domElement) {
+        document.getElementById('ui-overlay')?.classList.remove('hidden');
+        showScreen('title');
+    } else {
+        document.getElementById('ui-overlay')?.classList.add('hidden');
+    }
+});
+
+renderer.domElement.addEventListener('click', () => {
+    if (gameStarted && document.pointerLockElement !== renderer.domElement) {
+        renderer.domElement.requestPointerLock();
+    }
+});
+
+// --- 6. CONTROLS (BLOCK BREAK / PLACE) ---
+window.addEventListener('contextmenu', (e) => e.preventDefault());
+
+window.addEventListener('mousedown', (e) => {
+    if (!gameStarted || document.pointerLockElement !== renderer.domElement || !player || !mapGenerator) return;
+
+    const target = player.getLookAtBlock();
+    if (!target) return;
+
+    if (e.button === 0) { // Left Click -> Break
+        mapGenerator.removeBlock(target.targetBlock.x, target.targetBlock.y, target.targetBlock.z);
+    } else if (e.button === 2) { // Right Click -> Place Active Block
+        const activeKey = blockInventory[selectedSlotIndex].key;
+        const selectedMaterial = mapGenerator.materials[activeKey] || mapGenerator.materials.grass;
+
+        mapGenerator.addBlock(
+            target.placeBlock.x, 
+            target.placeBlock.y, 
+            target.placeBlock.z, 
+            selectedMaterial
+        );
+    }
+});
+
+// Resize
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// Render Loop
+const clock = new THREE.Clock();
+
+function animate() {
+    requestAnimationFrame(animate);
+    const delta = Math.min(clock.getDelta(), 0.1);
+
+    if (gameStarted && player) {
+        player.update(delta);
+    } else {
+        // Background orbit camera for main menu
+        const time = clock.getElapsedTime() * 0.15;
+        camera.position.set(Math.sin(time) * 25, 18, Math.cos(time) * 25);
+        camera.lookAt(0, 2, 0);
+    }
+
+    renderer.render(scene, camera);
+}
+
+animate();
