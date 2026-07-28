@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Player } from './player.js';
 
-// --- 1. UI NAVIGATION & PANEL STATE ---
+// --- 1. UI PANEL MANAGEMENT ---
 const panels = {
     title: document.getElementById('menu-title') || document.getElementById('title-overlay'),
     worlds: document.getElementById('menu-worlds'),
@@ -10,18 +10,18 @@ const panels = {
 };
 
 function showScreen(screenKey) {
-    // Hide all UI panels
+    // Hide all UI screens
     Object.values(panels).forEach(panel => {
         if (panel) panel.classList.add('hidden');
     });
 
-    // Show the targeted panel
+    // Display selected UI screen
     if (panels[screenKey]) {
         panels[screenKey].classList.remove('hidden');
     }
 }
 
-// Hook up Title Menu Buttons
+// Attach event listeners for Title Menu buttons
 document.getElementById('worlds-btn')?.addEventListener('click', () => showScreen('worlds'));
 document.getElementById('btn-worlds')?.addEventListener('click', () => showScreen('worlds'));
 
@@ -31,17 +31,18 @@ document.getElementById('btn-skin')?.addEventListener('click', () => showScreen(
 document.getElementById('settings-btn')?.addEventListener('click', () => showScreen('settings'));
 document.getElementById('btn-settings')?.addEventListener('click', () => showScreen('settings'));
 
-// Hook up all "Back" buttons across menus
+// Attach listeners for all "Back" buttons across sub-menus
 document.querySelectorAll('.btn-back').forEach(btn => {
     btn.addEventListener('click', () => showScreen('title'));
 });
 
-// --- 2. THREE.JS SCENE SETUP ---
+// --- 2. THREE.JS SCENE & LIGHTING SETUP ---
 let gameStarted = false;
 let player = null;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb);
+scene.background = new THREE.Color(0x87ceeb); // Sky blue
+scene.fog = new THREE.FogExp2(0x87ceeb, 0.015);
 
 const camera = new THREE.PerspectiveCamera(
     75,
@@ -52,19 +53,23 @@ const camera = new THREE.PerspectiveCamera(
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
-// Lights
+// Direct Sunlight & Ambient Lighting
 const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
-dirLight.position.set(30, 50, 30);
+dirLight.position.set(40, 60, 20);
 dirLight.castShadow = true;
+dirLight.shadow.mapSize.width = 2048;
+dirLight.shadow.mapSize.height = 2048;
 scene.add(dirLight);
 
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
 scene.add(ambientLight);
 
-// --- 3. TERRAIN & BLOCK MANAGEMENT ---
+// --- 3. TERRAIN & BLOCK DATA STORAGE ---
 const worldBlocks = [];
 const blockMap = new Map();
 
@@ -110,7 +115,7 @@ function generateTerrain() {
     }
 }
 
-// --- 4. GAME LAUNCH LOGIC ---
+// --- 4. GAME LAUNCH & POINTER LOCK CONTROL ---
 function launchGame() {
     if (!gameStarted) {
         generateTerrain();
@@ -118,7 +123,6 @@ function launchGame() {
         gameStarted = true;
     }
 
-    // Hide UI overlay and lock mouse
     const uiOverlay = document.getElementById('ui-overlay');
     if (uiOverlay) uiOverlay.classList.add('hidden');
     renderer.domElement.requestPointerLock();
@@ -127,7 +131,7 @@ function launchGame() {
 // Play World Trigger
 document.getElementById('btn-play-world')?.addEventListener('click', launchGame);
 
-// Pointer Lock / Escape Key Menu Toggle
+// Toggle menu on Pointer Lock change (ESC Key)
 document.addEventListener('pointerlockchange', () => {
     const uiOverlay = document.getElementById('ui-overlay');
     if (document.pointerLockElement !== renderer.domElement) {
@@ -138,13 +142,14 @@ document.addEventListener('pointerlockchange', () => {
     }
 });
 
+// Click Canvas to lock pointer back into game
 renderer.domElement.addEventListener('click', () => {
     if (gameStarted && document.pointerLockElement !== renderer.domElement) {
         renderer.domElement.requestPointerLock();
     }
 });
 
-// --- 5. CONTROLS FOR BLOCK BREAKING / PLACING ---
+// --- 5. BLOCK ACTION CONTROLS (BREAK / PLACE) ---
 window.addEventListener('contextmenu', (e) => e.preventDefault());
 
 window.addEventListener('mousedown', (e) => {
@@ -157,4 +162,37 @@ window.addEventListener('mousedown', (e) => {
         // Left Click -> Break Block
         removeBlock(target.targetBlock.x, target.targetBlock.y, target.targetBlock.z);
     } else if (e.button === 2) {
-        // Right Click -> Place
+        // Right Click -> Place Block
+        createBlock(target.placeBlock.x, target.placeBlock.y, target.placeBlock.z, grassMaterial);
+    }
+});
+
+// --- 6. RESIZE LISTENER & RENDER LOOP ---
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+const clock = new THREE.Clock();
+
+function animate() {
+    requestAnimationFrame(animate);
+
+    const delta = Math.min(clock.getDelta(), 0.1);
+
+    if (gameStarted && player) {
+        player.update(delta);
+    } else {
+        // Orbit view around world during menu screen
+        const time = clock.getElapsedTime() * 0.15;
+        camera.position.x = Math.sin(time) * 35;
+        camera.position.z = Math.cos(time) * 35;
+        camera.position.y = 20;
+        camera.lookAt(0, 3, 0);
+    }
+
+    renderer.render(scene, camera);
+}
+
+animate();
