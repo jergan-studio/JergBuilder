@@ -6,6 +6,7 @@ import { MapGenerator } from '../Map/mapGenerator.js';
 const panels = {
     title: document.getElementById('menu-title'),
     worlds: document.getElementById('menu-worlds'),
+    mods: document.getElementById('menu-mods'),
     skin: document.getElementById('menu-skin'),
     settings: document.getElementById('menu-settings')
 };
@@ -32,6 +33,7 @@ function bindClick(selector, callback) {
 }
 
 bindClick('#btn-worlds', () => showScreen('worlds'));
+bindClick('#btn-mods', () => showScreen('mods'));
 bindClick('#btn-skin', () => showScreen('skin'));
 bindClick('#btn-settings', () => showScreen('settings'));
 
@@ -43,7 +45,39 @@ document.querySelectorAll('.btn-back').forEach(btn => {
     });
 });
 
-// --- 2. BACKGROUND MUSIC SYSTEM ---
+// --- 2. MOD LOADER SYSTEM ---
+const modFileInput = document.getElementById('mod-file-input');
+const loadedModsList = document.getElementById('loaded-mods-list');
+
+if (modFileInput) {
+    modFileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            const modScriptCode = event.target.result;
+
+            try {
+                const scriptEl = document.createElement('script');
+                scriptEl.textContent = modScriptCode;
+                document.body.appendChild(scriptEl);
+
+                if (loadedModsList) {
+                    loadedModsList.innerText = `Active Mod: ${file.name}`;
+                }
+                alert(`Successfully loaded mod: ${file.name}`);
+            } catch (err) {
+                console.error("Error executing mod script:", err);
+                alert("Failed to execute mod file. Check console for details.");
+            }
+        };
+
+        reader.readAsText(file);
+    });
+}
+
+// --- 3. BACKGROUND MUSIC SYSTEM ---
 const bgMusic = new Audio('https://github.com/jergan-studio/JergBuilder/raw/refs/heads/main/Assets/monume-roblox-minecraft-fortnite-video-game-music-498036.mp3');
 bgMusic.loop = true;
 bgMusic.volume = 0.3;
@@ -54,10 +88,9 @@ function playMusic() {
     });
 }
 
-// Play audio on first user click anywhere
 window.addEventListener('click', () => playMusic(), { once: true });
 
-// --- 3. INVENTORY & HOTBAR SYSTEM ---
+// --- 4. INVENTORY & HOTBAR SYSTEM ---
 const blockInventory = [
     { name: 'Grass', key: 'grass', color: '#557a2b' },
     { name: 'Gray', key: 'gray', color: '#808080' },
@@ -101,7 +134,6 @@ function selectSlot(index) {
     }
 }
 
-// Key listeners (1-8) and mouse scroll wheel
 window.addEventListener('keydown', (e) => {
     const num = parseInt(e.key);
     if (!isNaN(num) && num >= 1 && num <= blockInventory.length) {
@@ -119,7 +151,7 @@ window.addEventListener('wheel', (e) => {
     }
 });
 
-// --- 4. THREE.JS SCENE SETUP ---
+// --- 5. THREE.JS SCENE SETUP ---
 let gameStarted = false;
 let player = null;
 let mapGenerator = null;
@@ -141,7 +173,7 @@ scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 
 createHotbarUI();
 
-// --- 5. GAME LAUNCH & POINTER LOCK ---
+// --- 6. GAME LAUNCH & POINTER LOCK ---
 function launchGame() {
     playMusic();
 
@@ -179,7 +211,7 @@ renderer.domElement.addEventListener('click', () => {
     }
 });
 
-// --- 6. CONTROLS (BLOCK BREAK / PLACE) ---
+// --- 7. CONTROLS (BLOCK BREAK / PLACE) ---
 window.addEventListener('contextmenu', (e) => e.preventDefault());
 
 window.addEventListener('mousedown', (e) => {
@@ -220,7 +252,6 @@ function animate() {
     if (gameStarted && player) {
         player.update(delta);
     } else {
-        // Background orbit camera for main menu
         const time = clock.getElapsedTime() * 0.15;
         camera.position.set(Math.sin(time) * 25, 18, Math.cos(time) * 25);
         camera.lookAt(0, 2, 0);
