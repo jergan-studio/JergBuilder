@@ -38,12 +38,12 @@
             align-items: center;
             justify-content: center;
             z-index: 9999;
-            pointer-events: none; /* Allows canvas interactions underneath */
+            pointer-events: none;
         }
 
         /* MENU PANELS */
         .menu-panel {
-            pointer-events: auto; /* Enables mouse clicks on buttons */
+            pointer-events: auto;
             display: flex;
             flex-direction: column;
             gap: 14px;
@@ -178,6 +178,7 @@
         <div id="menu-title" class="menu-panel">
             <h2>JergBuilder</h2>
             <button id="btn-worlds" class="menu-btn">Worlds</button>
+            <button id="btn-mods" class="menu-btn">Mods</button>
             <button id="btn-skin" class="menu-btn">Select Skin</button>
             <button id="btn-settings" class="menu-btn">Settings</button>
         </div>
@@ -185,6 +186,20 @@
         <div id="menu-worlds" class="menu-panel hidden">
             <h2>Select World</h2>
             <button id="btn-play-world" class="menu-btn">Play World</button>
+            <button class="menu-btn btn-back">Back</button>
+        </div>
+
+        <div id="menu-mods" class="menu-panel hidden">
+            <h2>Mod Manager</h2>
+            <p style="font-size: 12px; color: #aaa; text-align: center;">Upload a .js mod file to insert dynamic code.</p>
+            
+            <label for="mod-file-input" class="menu-btn" style="text-align: center; display: block; line-height: 24px;">
+                📁 Load JS Mod File
+            </label>
+            <input type="file" id="mod-file-input" accept=".js" style="display: none;">
+
+            <div id="loaded-mods-list" style="font-size: 13px; color: #00ffcc; text-align: center;"></div>
+
             <button class="menu-btn btn-back">Back</button>
         </div>
 
