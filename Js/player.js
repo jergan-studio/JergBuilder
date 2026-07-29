@@ -7,8 +7,8 @@ export class Player {
         this.camera = camera;
         this.mapGenerator = mapGenerator;
 
-        // Position & Movement Vectors
-        this.position = new THREE.Vector3(0, 20, 0);
+        // Player Vectors
+        this.position = new THREE.Vector3(0, 18, 0);
         this.velocity = new THREE.Vector3(0, 0, 0);
         this.rotation = new THREE.Euler(0, 0, 0, 'YXZ');
 
@@ -18,13 +18,15 @@ export class Player {
         this.gravity = 28.0;
         this.onGround = false;
 
-        // Perspective System: 0 = 1st Person | 1 = 3rd Person Back | 2 = 2nd Person Front
+        // Camera Modes: 0 = 1st Person | 1 = 3rd Person (Back) | 2 = 2nd Person (Front)
         this.viewMode = 0;
         this.cameraDistance = 4.5;
-        this.eyeHeight = 0.4;
 
-        // Input Tracking
+        // Controls
         this.keys = { forward: false, backward: false, left: false, right: false, jump: false };
+
+        // Hotbar State
+        this.selectedSlot = 1;
 
         // Model Mesh
         this.mesh = null;
@@ -35,7 +37,6 @@ export class Player {
     loadModel() {
         const loader = new GLTFLoader();
 
-        // Load jergplr.glb directly from the project root
         loader.load(
             './jergplr.glb',
             (gltf) => {
@@ -56,7 +57,7 @@ export class Player {
             },
             undefined,
             (err) => {
-                console.warn("⚠️ Could not find ./jergplr.glb, creating fallback model...", err);
+                console.warn("⚠️ Using primitive fallback player mesh.");
                 this.createFallbackMesh();
             }
         );
@@ -64,7 +65,7 @@ export class Player {
 
     createFallbackMesh() {
         this.mesh = new THREE.Group();
-        const mat = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.5 });
+        const mat = new THREE.MeshStandardMaterial({ color: 0x666666, roughness: 0.5 });
 
         const head = new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 16), mat);
         head.position.y = 1.4;
@@ -84,11 +85,15 @@ export class Player {
             if (e.code === 'KeyD') this.keys.right = true;
             if (e.code === 'Space') this.keys.jump = true;
 
-            // Perspective toggle hotkey ]
+            // Camera Toggle Hotkey: ]
             if (e.code === 'BracketRight') {
                 this.viewMode = (this.viewMode + 1) % 3;
-                const modes = ["1st Person", "3rd Person (Back)", "2nd Person (Front)"];
-                console.log(`🎥 Camera Mode: ${modes[this.viewMode]}`);
+            }
+
+            // Hotbar selection keys 1 - 8
+            if (e.key >= '1' && e.key <= '8') {
+                this.selectedSlot = parseInt(e.key);
+                this.updateHotbarUI();
             }
         });
 
@@ -106,8 +111,18 @@ export class Player {
                 this.rotation.y -= e.movementX * sensitivity;
                 this.rotation.x -= e.movementY * sensitivity;
 
-                // Clamp vertical look angle
                 this.rotation.x = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, this.rotation.x));
+            }
+        });
+    }
+
+    updateHotbarUI() {
+        const slots = document.querySelectorAll('.hotbar-slot');
+        slots.forEach((slot, idx) => {
+            if (idx + 1 === this.selectedSlot) {
+                slot.classList.add('active');
+            } else {
+                slot.classList.remove('active');
             }
         });
     }
@@ -115,7 +130,6 @@ export class Player {
     update(delta) {
         if (!delta || delta > 0.1) delta = 0.016;
 
-        // Movement Direction Calculations
         const moveDir = new THREE.Vector3();
         if (this.keys.forward) moveDir.z -= 1;
         if (this.keys.backward) moveDir.z += 1;
@@ -127,7 +141,6 @@ export class Player {
         this.velocity.x = (moveDir.x * Math.cos(yaw) - moveDir.z * Math.sin(yaw)) * this.speed;
         this.velocity.z = (moveDir.x * Math.sin(yaw) + moveDir.z * Math.cos(yaw)) * this.speed;
 
-        // Gravity & Jump Mechanics
         if (!this.onGround) {
             this.velocity.y -= this.gravity * delta;
         } else if (this.keys.jump) {
@@ -135,18 +148,17 @@ export class Player {
             this.onGround = false;
         }
 
-        // Apply velocity vectors
         this.position.x += this.velocity.x * delta;
         this.position.y += this.velocity.y * delta;
         this.position.z += this.velocity.z * delta;
 
-        // Terrain Collision Detection
-        let islandY = -100;
+        // Ground height collision check
+        let terrainY = -100;
         if (this.mapGenerator && typeof this.mapGenerator.getTerrainHeight === 'function') {
-            islandY = this.mapGenerator.getTerrainHeight(this.position.x, this.position.z);
+            terrainY = this.mapGenerator.getTerrainHeight(this.position.x, this.position.z);
         }
 
-        const standingLevel = islandY + 1.5;
+        const standingLevel = terrainY + 1.5;
 
         if (this.position.y <= standingLevel) {
             this.position.y = standingLevel;
@@ -154,13 +166,10 @@ export class Player {
             this.onGround = true;
         }
 
-        // Sync player mesh position
         if (this.mesh) {
             this.mesh.position.copy(this.position);
             this.mesh.position.y -= 1.0;
             this.mesh.rotation.y = this.rotation.y;
-
-            // Hide in first-person perspective
             this.mesh.visible = (this.viewMode !== 0);
         }
 
@@ -171,23 +180,20 @@ export class Player {
         if (!this.camera) return;
 
         const eyePos = this.position.clone();
-        eyePos.y += this.eyeHeight;
+        eyePos.y += 0.4;
 
         if (this.viewMode === 0) {
-            // First Person
             this.camera.position.copy(eyePos);
             this.camera.rotation.copy(this.rotation);
         } else {
             const forwardDir = new THREE.Vector3(0, 0, -1).applyEuler(this.rotation);
 
             if (this.viewMode === 1) {
-                // 3rd Person Back
                 const camPos = eyePos.clone().sub(forwardDir.clone().multiplyScalar(this.cameraDistance));
                 camPos.y += 0.8;
                 this.camera.position.copy(camPos);
                 this.camera.lookAt(eyePos);
             } else if (this.viewMode === 2) {
-                // 2nd Person Front
                 const camPos = eyePos.clone().add(forwardDir.clone().multiplyScalar(this.cameraDistance));
                 camPos.y += 0.8;
                 this.camera.position.copy(camPos);
