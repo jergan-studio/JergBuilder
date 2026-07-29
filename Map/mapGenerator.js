@@ -4,36 +4,33 @@ export class MapGenerator {
     constructor(scene, seed) {
         this.scene = scene;
         this.seed = seed || 'default_seed';
-        
-        // Map storage for block checking
-        this.blocks = new Map();
-        this.islandRadius = 20;
 
-        // Texture Loading
+        this.blocks = new Map();
+        this.islandRadius = 22;
+
         this.textureLoader = new THREE.TextureLoader();
         this.materials = {};
         this.initMaterials();
     }
 
     initMaterials() {
-        // Load grass texture from JergBuilder Assets
         const grassTex = this.textureLoader.load('Assets/Grass.png');
         grassTex.magFilter = THREE.NearestFilter;
         grassTex.minFilter = THREE.NearestFilter;
 
-        this.materials.grass = new THREE.MeshStandardMaterial({ 
-            map: grassTex, 
-            roughness: 0.8 
+        this.materials.grass = new THREE.MeshStandardMaterial({
+            map: grassTex,
+            roughness: 0.8
         });
 
-        this.materials.dirt = new THREE.MeshStandardMaterial({ 
-            color: 0x5c4033, 
-            roughness: 0.9 
+        this.materials.dirt = new THREE.MeshStandardMaterial({
+            color: 0x5c4033,
+            roughness: 0.9
         });
 
-        this.materials.stone = new THREE.MeshStandardMaterial({ 
-            color: 0x777777, 
-            roughness: 0.7 
+        this.materials.stone = new THREE.MeshStandardMaterial({
+            color: 0x666666,
+            roughness: 0.7
         });
     }
 
@@ -45,13 +42,15 @@ export class MapGenerator {
                 const dist = Math.sqrt(x * x + z * z);
 
                 if (dist <= this.islandRadius) {
-                    // Standard v1.2 Terrain Height calculation
-                    const height = Math.floor(10 + Math.sin(x * 0.2) * 2 + Math.cos(z * 0.2) * 2);
+                    const height = Math.floor(12 + Math.sin(x * 0.18) * 3 + Math.cos(z * 0.18) * 2);
 
-                    for (let y = height - 4; y <= height; y++) {
+                    for (let y = height - 5; y <= height; y++) {
                         let mat = this.materials.stone;
-                        if (y === height) mat = this.materials.grass;
-                        else if (y > height - 3) mat = this.materials.dirt;
+                        if (y === height) {
+                            mat = this.materials.grass;
+                        } else if (y > height - 3) {
+                            mat = this.materials.dirt;
+                        }
 
                         const block = new THREE.Mesh(boxGeo, mat);
                         block.position.set(x, y, z);
@@ -64,19 +63,18 @@ export class MapGenerator {
                 }
             }
         }
-        console.log(`✅ Terrain generated (v1.2) with ${this.blocks.size} blocks.`);
+        console.log(`✅ Terrain generated with ${this.blocks.size} blocks.`);
     }
 
-    // Ground Height Detection for Player Physics
     getTerrainHeight(x, z) {
         const gx = Math.round(x);
         const gz = Math.round(z);
 
-        for (let y = 30; y >= -10; y--) {
+        for (let y = 35; y >= -10; y--) {
             if (this.blocks.has(`${gx},${y},${gz}`)) {
                 return y;
             }
         }
-        return -100; // Void fall boundary
+        return -100;
     }
 }
