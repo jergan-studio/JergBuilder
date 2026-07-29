@@ -7,12 +7,12 @@ export class Player {
         this.camera = camera;
         this.mapGenerator = mapGenerator;
 
-        // --- Player World Vectors ---
-        this.position = new THREE.Vector3(0, 16, 0); // Spawn safely above terrain
+        // --- World Vectors & Spawn Position ---
+        this.position = new THREE.Vector3(0, 20, 0); // Spawn safely above island
         this.velocity = new THREE.Vector3(0, 0, 0);
         this.rotation = new THREE.Euler(0, 0, 0, 'YXZ');
 
-        // --- Physics & Speeds ---
+        // --- Movement & Physics Settings ---
         this.speed = 8.0;
         this.jumpForce = 12.0;
         this.gravity = 28.0;
@@ -23,7 +23,7 @@ export class Player {
         this.viewMode = 0; 
         this.cameraDistance = 4.5;
 
-        // --- Movement Controls ---
+        // --- Input Controls ---
         this.keys = {
             forward: false,
             backward: false,
@@ -32,18 +32,18 @@ export class Player {
             jump: false
         };
 
-        // --- Load GLB Player Model ---
+        // --- Load Root Model ---
         this.mesh = null;
         this.loadModel();
 
-        // --- Controls Event Setup ---
+        // --- Input Event Setup ---
         this.setupInputs();
     }
 
     loadModel() {
         const loader = new GLTFLoader();
         
-        // Fetch jergplr.glb directly from project root
+        // Loads jergplr.glb directly from project root
         loader.load(
             './jergplr.glb',
             (gltf) => {
@@ -52,7 +52,7 @@ export class Player {
                 this.mesh = gltf.scene;
                 this.mesh.scale.set(1.0, 1.0, 1.0);
 
-                // Enable shadow casting for player model
+                // Enable shadow casting
                 this.mesh.traverse((child) => {
                     if (child.isMesh) {
                         child.castShadow = true;
@@ -61,7 +61,7 @@ export class Player {
                 });
 
                 this.scene.add(this.mesh);
-                console.log("✅ jergplr.glb loaded from root!");
+                console.log("✅ jergplr.glb loaded successfully from root!");
             },
             undefined,
             (err) => {
@@ -116,7 +116,7 @@ export class Player {
                 this.rotation.y -= e.movementX * sensitivity;
                 this.rotation.x -= e.movementY * sensitivity;
 
-                // Clamp pitch so camera doesn't flip over upside down
+                // Clamp pitch so camera doesn't flip upside down
                 this.rotation.x = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, this.rotation.x));
             }
         });
@@ -148,16 +148,19 @@ export class Player {
             this.onGround = false;
         }
 
-        // Apply Positions
+        // Apply Position Updates
         this.position.x += this.velocity.x * delta;
         this.position.y += this.velocity.y * delta;
         this.position.z += this.velocity.z * delta;
 
-        // --- Ground Terrain Collision ---
-        let groundLevel = 1.0;
+        // --- Terrain Collision & Height Snap ---
+        let islandTopY = -100;
         if (this.mapGenerator && typeof this.mapGenerator.getTerrainHeight === 'function') {
-            groundLevel = this.mapGenerator.getTerrainHeight(this.position.x, this.position.z) + 1.2;
+            islandTopY = this.mapGenerator.getTerrainHeight(this.position.x, this.position.z);
         }
+
+        // Standing height offset (feet snap to top face of block)
+        const groundLevel = islandTopY + 1.5;
 
         if (this.position.y <= groundLevel) {
             this.position.y = groundLevel;
@@ -168,10 +171,10 @@ export class Player {
         // --- Model Mesh Positioning ---
         if (this.mesh) {
             this.mesh.position.copy(this.position);
-            this.mesh.position.y -= 1.2; // Keep model feet grounded
+            this.mesh.position.y -= 1.0; // Align base of spheres with ground
             this.mesh.rotation.y = this.rotation.y;
 
-            // Hide model in First-Person so it doesn't block vision
+            // Hide model in First-Person so it doesn't block player view
             this.mesh.visible = (this.viewMode !== 0);
         }
 
@@ -182,27 +185,27 @@ export class Player {
         if (!this.camera) return;
 
         const eyePos = this.position.clone();
-        eyePos.y += 0.4; // Eye height
+        eyePos.y += 0.4; // Eye-level offset
 
         if (this.viewMode === 0) {
-            // First Person
+            // --- First Person ---
             this.camera.position.copy(eyePos);
             this.camera.rotation.copy(this.rotation);
         } else {
             const forwardDir = new THREE.Vector3(0, 0, -1).applyEuler(this.rotation);
 
             if (this.viewMode === 1) {
-                // Third Person Back
+                // --- Third Person (Back) ---
                 const camPos = eyePos.clone().sub(forwardDir.clone().multiplyScalar(this.cameraDistance));
                 camPos.y += 0.8;
                 this.camera.position.copy(camPos);
                 this.camera.lookAt(eyePos);
             } else if (this.viewMode === 2) {
-                // Second Person Front (Camera in front looking directly back at player)
+                // --- Second Person (Front) ---
                 const camPos = eyePos.clone().add(forwardDir.clone().multiplyScalar(this.cameraDistance));
                 camPos.y += 0.8;
                 this.camera.position.copy(camPos);
-                this.camera.lookAt(eyePos);
+                this.camera.lookAt(eyePos); // Locks camera directly looking at player model
             }
         }
     }
