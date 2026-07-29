@@ -4,7 +4,6 @@ export class MapGenerator {
     constructor(scene, seed) {
         this.scene = scene;
         this.seed = seed || 'default_seed';
-
         this.blocks = new Map();
         this.islandRadius = 22;
 
@@ -18,20 +17,9 @@ export class MapGenerator {
         grassTex.magFilter = THREE.NearestFilter;
         grassTex.minFilter = THREE.NearestFilter;
 
-        this.materials.grass = new THREE.MeshStandardMaterial({
-            map: grassTex,
-            roughness: 0.8
-        });
-
-        this.materials.dirt = new THREE.MeshStandardMaterial({
-            color: 0x5c4033,
-            roughness: 0.9
-        });
-
-        this.materials.stone = new THREE.MeshStandardMaterial({
-            color: 0x666666,
-            roughness: 0.7
-        });
+        this.materials.grass = new THREE.MeshStandardMaterial({ map: grassTex, roughness: 0.8 });
+        this.materials.dirt = new THREE.MeshStandardMaterial({ color: 0x5c4033, roughness: 0.9 });
+        this.materials.stone = new THREE.MeshStandardMaterial({ color: 0x666666, roughness: 0.7 });
     }
 
     generate() {
@@ -46,11 +34,8 @@ export class MapGenerator {
 
                     for (let y = height - 5; y <= height; y++) {
                         let mat = this.materials.stone;
-                        if (y === height) {
-                            mat = this.materials.grass;
-                        } else if (y > height - 3) {
-                            mat = this.materials.dirt;
-                        }
+                        if (y === height) mat = this.materials.grass;
+                        else if (y > height - 3) mat = this.materials.dirt;
 
                         const block = new THREE.Mesh(boxGeo, mat);
                         block.position.set(x, y, z);
