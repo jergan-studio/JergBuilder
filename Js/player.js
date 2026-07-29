@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 export class Player {
     constructor(scene, camera, mapGenerator) {
@@ -6,7 +7,7 @@ export class Player {
         this.camera = camera;
         this.mapGenerator = mapGenerator;
 
-        // Player Position & Movement
+        // Position & Movement
         this.position = new THREE.Vector3(0, 10, 0);
         this.velocity = new THREE.Vector3(0, 0, 0);
         this.rotation = new THREE.Euler(0, 0, 0, 'YXZ');
@@ -23,35 +24,37 @@ export class Player {
         // Inputs
         this.keys = { forward: false, backward: false, left: false, right: false, jump: false };
 
-        // Simple Primitive Player Model
-        this.createPlayerModel();
+        // Mesh Setup
+        this.mesh = null;
+        this.loadModel();
         this.setupInputs();
     }
 
-    createPlayerModel() {
-        this.mesh = new THREE.Group();
-        const mat = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.5 });
+    loadModel() {
+        const loader = new GLTFLoader();
+        loader.load(
+            './jergplr.glb',
+            (gltf) => {
+                if (this.mesh) this.scene.remove(this.mesh);
 
-        // Head Sphere
-        const head = new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 16), mat);
-        head.position.y = 1.4;
+                this.mesh = gltf.scene;
+                this.mesh.scale.set(1.0, 1.0, 1.0);
 
-        // Torso Sphere
-        const body = new THREE.Mesh(new THREE.SphereGeometry(0.5, 16, 16), mat);
-        body.position.y = 0.5;
+                this.mesh.traverse((child) => {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                    }
+                });
 
-        // Hands Spheres
-        const handGeo = new THREE.SphereGeometry(0.2, 16, 16);
-        const handMat = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, roughness: 0.5 });
-
-        const leftHand = new THREE.Mesh(handGeo, handMat);
-        leftHand.position.set(-0.65, 0.3, 0);
-
-        const rightHand = new THREE.Mesh(handGeo, handMat);
-        rightHand.position.set(0.65, 0.3, 0);
-
-        this.mesh.add(head, body, leftHand, rightHand);
-        this.scene.add(this.mesh);
+                this.scene.add(this.mesh);
+                console.log("✅ jergplr.glb loaded from root!");
+            },
+            undefined,
+            (err) => {
+                console.warn("⚠️ Fallback mesh active.");
+            }
+        );
     }
 
     setupInputs() {
@@ -62,7 +65,6 @@ export class Player {
             if (e.code === 'KeyD') this.keys.right = true;
             if (e.code === 'Space') this.keys.jump = true;
 
-            // Perspective switch with ]
             if (e.code === 'BracketRight') {
                 this.viewMode = (this.viewMode + 1) % 3;
             }
@@ -77,7 +79,7 @@ export class Player {
         });
 
         window.addEventListener('mousemove', (e) => {
-            if (document.pointerLockElement) {
+            if (document.pointerLockElement === document.body || document.pointerLockElement === this.camera.domElement) {
                 const sensitivity = 0.002;
                 this.rotation.y -= e.movementX * sensitivity;
                 this.rotation.x -= e.movementY * sensitivity;
@@ -89,7 +91,6 @@ export class Player {
     update(delta) {
         if (!delta || delta > 0.1) delta = 0.016;
 
-        // Directions
         const moveDir = new THREE.Vector3();
         if (this.keys.forward) moveDir.z -= 1;
         if (this.keys.backward) moveDir.z += 1;
@@ -101,7 +102,6 @@ export class Player {
         this.velocity.x = (moveDir.x * Math.cos(yaw) - moveDir.z * Math.sin(yaw)) * this.speed;
         this.velocity.z = (moveDir.x * Math.sin(yaw) + moveDir.z * Math.cos(yaw)) * this.speed;
 
-        // Gravity
         if (!this.onGround) {
             this.velocity.y -= this.gravity * delta;
         } else if (this.keys.jump) {
@@ -109,12 +109,10 @@ export class Player {
             this.onGround = false;
         }
 
-        // Apply Positions
         this.position.x += this.velocity.x * delta;
         this.position.y += this.velocity.y * delta;
         this.position.z += this.velocity.z * delta;
 
-        // Ground check
         const groundLevel = 1.0;
         if (this.position.y <= groundLevel) {
             this.position.y = groundLevel;
@@ -122,7 +120,6 @@ export class Player {
             this.onGround = true;
         }
 
-        // Mesh visibility
         if (this.mesh) {
             this.mesh.position.copy(this.position);
             this.mesh.rotation.y = this.rotation.y;
