@@ -1,185 +1,57 @@
 import * as THREE from 'three';
 
-class SeededRandom {
-    constructor(seed = Math.random()) {
-        this.setSeed(seed);
-    }
-
-    setSeed(seed) {
-        if (typeof seed === 'string') {
-            let h = 2166136261;
-            for (let i = 0; i < seed.length; i++) {
-                h = Math.imul(h ^ seed.charCodeAt(i), 16777619);
-            }
-            this.seed = h >>> 0;
-        } else {
-            this.seed = Math.abs(seed) || 12345;
-        }
-    }
-
-    next() {
-        this.seed = (this.seed * 9301 + 49297) % 233280;
-        return this.seed / 233280;
-    }
-}
-
-class FastNoise {
-    constructor(prng) {
-        this.prng = prng;
-        this.perm = new Uint8Array(512);
-        this.init();
-    }
-
-    init() {
-        const p = new Uint8Array(256);
-        for (let i = 0; i < 256; i++) p[i] = i;
-        
-        for (let i = 255; i > 0; i--) {
-            const j = Math.floor(this.prng.next() * (i + 1));
-            const temp = p[i];
-            p[i] = p[j];
-            p[j] = temp;
-        }
-
-        for (let i = 0; i < 512; i++) {
-            this.perm[i] = p[i & 255];
-        }
-    }
-
-    fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
-    lerp(t, a, b) { return a + t * (b - a); }
-
-    get2D(x, y) {
-        const X = Math.floor(x) & 255;
-        const Y = Math.floor(y) & 255;
-        const xf = x - Math.floor(x);
-        const yf = y - Math.floor(y);
-        const u = this.fade(xf);
-        const v = this.fade(yf);
-
-        const aa = this.perm[this.perm[X] + Y];
-        const ab = this.perm[this.perm[X] + Y + 1];
-        const ba = this.perm[this.perm[X + 1] + Y];
-        const bb = this.perm[this.perm[X + 1] + Y + 1];
-
-        const x1 = this.lerp(u, aa / 255, ba / 255);
-        const x2 = this.lerp(u, ab / 255, bb / 255);
-
-        return this.lerp(v, x1, x2);
-    }
-}
-
 export class MapGenerator {
-    constructor(scene, seed = 'JergBuilder_Default') {
+    constructor(scene, seed) {
         this.scene = scene;
         this.seed = seed;
-        this.mapSize = 24;
-        
-        this.prng = new SeededRandom(this.seed);
-        this.noise = new FastNoise(this.prng);
-
-        this.blockGeometry = new THREE.BoxGeometry(1, 1, 1);
-        this.materials = this.initMaterials();
-
-        this.worldBlocks = [];
-        this.blockMap = new Map();
+        this.blocks = new Map();
+        this.islandRadius = 20;
     }
 
-    initMaterials() {
-        const textureLoader = new THREE.TextureLoader();
+    generate() {
+        const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+        const grassMat = new THREE.MeshStandardMaterial({ color: 0x2e8b57 });
+        const dirtMat = new THREE.MeshStandardMaterial({ color: 0x5c4033 });
+        const stoneMat = new THREE.MeshStandardMaterial({ color: 0x777777 });
 
-        const grassTexture = textureLoader.load(
-            'https://raw.githubusercontent.com/jergan-studio/JergBuilder/main/Assets/Grass.png',
-            (tex) => {
-                tex.magFilter = THREE.NearestFilter;
-                tex.minFilter = THREE.NearestFilter;
-            },
-            undefined,
-            (err) => console.warn('Texture load failed, using fallback color.', err)
-        );
+        // InstancedMesh or Group generation
+        for (let x = -this.islandRadius; x <= this.islandRadius; x++) {
+            for (let z = -this.islandRadius; z <= this.islandRadius; z++) {
+                const distFromCenter = Math.sqrt(x * x + z * z);
+                
+                if (distFromCenter <= this.islandRadius) {
+                    // Height curve for island
+                    const height = Math.floor(12 + Math.sin(x * 0.2) * 2 + Math.cos(z * 0.2) * 2);
 
-        return {
-            grass: new THREE.MeshLambertMaterial({ map: grassTexture, color: 0x557a2b }),
-            dirt: new THREE.MeshLambertMaterial({ color: 0x5c4033 }),
-            stone: new THREE.MeshLambertMaterial({ color: 0x777777 }),
-            
-            // --- NEW INVENTORY BLOCKS ---
-            gray: new THREE.MeshLambertMaterial({ color: 0x808080 }),
-            blue: new THREE.MeshLambertMaterial({ color: 0x1e90ff }),
-            red: new THREE.MeshLambertMaterial({ color: 0xff3333 }),
-            pink: new THREE.MeshLambertMaterial({ color: 0xff69b4 }),
-            green: new THREE.MeshLambertMaterial({ color: 0x2e8b57 }),
-            lime: new THREE.MeshLambertMaterial({ color: 0x32cd32 }),
-            yellow: new THREE.MeshLambertMaterial({ color: 0xffd700 })
-        };
-    }
+                    for (let y = height - 4; y <= height; y++) {
+                        let mat = stoneMat;
+                        if (y === height) mat = grassMat;
+                        else if (y > height - 3) mat = dirtMat;
 
-    setSeed(newSeed) {
-        this.seed = newSeed;
-        this.prng.setSeed(newSeed);
-        this.noise = new FastNoise(this.prng);
-    }
-
-    generate(seedOverride = null) {
-        if (seedOverride !== null) this.setSeed(seedOverride);
-
-        this.clearMap();
-        const halfSize = Math.floor(this.mapSize / 2);
-
-        for (let x = -halfSize; x < halfSize; x++) {
-            for (let z = -halfSize; z < halfSize; z++) {
-                const nx = x * 0.08;
-                const nz = z * 0.08;
-                const rawHeight = this.noise.get2D(nx + 100, nz + 100);
-                const maxTerrainHeight = Math.floor(rawHeight * 8) + 2;
-
-                for (let y = 0; y <= maxTerrainHeight; y++) {
-                    let mat = this.materials.stone;
-
-                    if (y === maxTerrainHeight) {
-                        mat = this.materials.grass;
-                    } else if (y >= maxTerrainHeight - 2) {
-                        mat = this.materials.dirt;
+                        const block = new THREE.Mesh(boxGeo, mat);
+                        block.position.set(x, y, z);
+                        block.receiveShadow = true;
+                        block.castShadow = true;
+                        
+                        this.scene.add(block);
+                        this.blocks.set(`${x},${y},${z}`, block);
                     }
-
-                    this.addBlock(x, y, z, mat);
                 }
             }
         }
-
-        return this.worldBlocks;
     }
 
-    addBlock(x, y, z, material = this.materials.grass) {
-        const key = `${x},${y},${z}`;
-        if (this.blockMap.has(key)) return null;
+    // Helper used by Player.js to detect grass collision
+    getTerrainHeight(x, z) {
+        const gridX = Math.round(x);
+        const gridZ = Math.round(z);
 
-        const block = new THREE.Mesh(this.blockGeometry, material);
-        block.position.set(x + 0.5, y + 0.5, z + 0.5);
-        block.castShadow = true;
-        block.receiveShadow = true;
-
-        this.scene.add(block);
-        this.worldBlocks.push(block);
-        this.blockMap.set(key, block);
-
-        return block;
-    }
-
-    removeBlock(x, y, z) {
-        const key = `${x},${y},${z}`;
-        const block = this.blockMap.get(key);
-        if (block) {
-            this.scene.remove(block);
-            const idx = this.worldBlocks.indexOf(block);
-            if (idx !== -1) this.worldBlocks.splice(idx, 1);
-            this.blockMap.delete(key);
+        // Find highest block at x, z coordinates
+        for (let y = 30; y >= 0; y--) {
+            if (this.blocks.has(`${gridX},${y},${gridZ}`)) {
+                return y;
+            }
         }
-    }
-
-    clearMap() {
-        this.worldBlocks.forEach(block => this.scene.remove(block));
-        this.worldBlocks = [];
-        this.blockMap.clear();
+        return 10; // Default terrain floor height
     }
 }
