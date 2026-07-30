@@ -1,37 +1,85 @@
-initMaterials() {
-        const textureLoader = new THREE.TextureLoader();
+import * as THREE from 'three';
 
-        // Use direct CORS-friendly RAW URL or local relative path
-        const grassTexture = textureLoader.load(
-            'https://raw.githubusercontent.com/jergan-studio/JergBuilder/main/Assets/Grass.png',
-            (tex) => {
-                tex.magFilter = THREE.NearestFilter;
-                tex.minFilter = THREE.NearestFilter;
-            },
-            undefined,
-            (err) => console.warn('Texture failed to load, falling back to color material.', err)
-            (err) => console.warn('Texture load failed, using fallback color.', err)
-        );
+export class MapGenerator {
+    constructor(scene, seed) {
+        this.scene = scene;
+        this.seed = seed || 'default_seed';
+        
+        // Key: "x,y,z" -> block mesh object
+        this.blocks = new Map();
+        this.islandRadius = 20;
 
-        const grassMat = new THREE.MeshLambertMaterial({ map: grassTexture, color: 0x557a2b });
-        const dirtMat = new THREE.MeshLambertMaterial({ color: 0x5c4033 });
-        const stoneMat = new THREE.MeshLambertMaterial({ color: 0x777777 });
-
-        return { grass: grassMat, dirt: dirtMat, stone: stoneMat };
-        return {
-            grass: new THREE.MeshLambertMaterial({ map: grassTexture, color: 0x557a2b }),
-            dirt: new THREE.MeshLambertMaterial({ color: 0x5c4033 }),
-            stone: new THREE.MeshLambertMaterial({ color: 0x777777 }),
-            
-            // --- NEW INVENTORY BLOCKS ---
-            gray: new THREE.MeshLambertMaterial({ color: 0x808080 }),
-            blue: new THREE.MeshLambertMaterial({ color: 0x1e90ff }),
-            red: new THREE.MeshLambertMaterial({ color: 0xff3333 }),
-            pink: new THREE.MeshLambertMaterial({ color: 0xff69b4 }),
-            green: new THREE.MeshLambertMaterial({ color: 0x2e8b57 }),
-            lime: new THREE.MeshLambertMaterial({ color: 0x32cd32 }),
-            yellow: new THREE.MeshLambertMaterial({ color: 0xffd700 })
-        };
+        // Texture Loading
+        this.textureLoader = new THREE.TextureLoader();
+        this.materials = {};
+        this.initMaterials();
     }
 
-    setSeed(newSeed) {
+    initMaterials() {
+        // Custom grass texture
+        const grassTex = this.textureLoader.load('Assets/Grass.png');
+        grassTex.magFilter = THREE.NearestFilter;
+        grassTex.minFilter = THREE.NearestFilter;
+
+        this.materials.grass = new THREE.MeshStandardMaterial({ 
+            map: grassTex, 
+            roughness: 0.8 
+        });
+
+        this.materials.dirt = new THREE.MeshStandardMaterial({ 
+            color: 0x5c4033, 
+            roughness: 0.9 
+        });
+
+        this.materials.stone = new THREE.MeshStandardMaterial({ 
+            color: 0x666666, 
+            roughness: 0.7 
+        });
+    }
+
+    generate() {
+        const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+
+        for (let x = -this.islandRadius; x <= this.islandRadius; x++) {
+            for (let z = -this.islandRadius; z <= this.islandRadius; z++) {
+                const dist = Math.sqrt(x * x + z * z);
+
+                if (dist <= this.islandRadius) {
+                    // Curved island height contours
+                    const height = Math.floor(10 + Math.sin(x * 0.2) * 2.5 + Math.cos(z * 0.2) * 2.5);
+
+                    for (let y = height - 4; y <= height; y++) {
+                        let mat = this.materials.stone;
+                        if (y === height) {
+                            mat = this.materials.grass;
+                        } else if (y > height - 3) {
+                            mat = this.materials.dirt;
+                        }
+
+                        const block = new THREE.Mesh(boxGeo, mat);
+                        block.position.set(x, y, z);
+                        block.castShadow = true;
+                        block.receiveShadow = true;
+
+                        this.scene.add(block);
+                        this.blocks.set(`${x},${y},${z}`, block);
+                    }
+                }
+            }
+        }
+        console.log(`✅ [v1.2] Map generated with ${this.blocks.size} blocks.`);
+    }
+
+    // Fast lookup for vertical terrain height at position (X, Z)
+    getTerrainHeight(x, z) {
+        const gx = Math.round(x);
+        const gz = Math.round(z);
+
+        for (let y = 35; y >= -10; y--) {
+            if (this.blocks.has(`${gx},${y},${gz}`)) {
+                return y;
+            }
+        }
+        return -100; // Void floor fallback
+    }
+}
