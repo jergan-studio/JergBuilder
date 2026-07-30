@@ -33,7 +33,7 @@ class FastNoise {
     init() {
         const p = new Uint8Array(256);
         for (let i = 0; i < 256; i++) p[i] = i;
-        
+
         for (let i = 255; i > 0; i--) {
             const j = Math.floor(this.prng.next() * (i + 1));
             const temp = p[i];
@@ -70,11 +70,14 @@ class FastNoise {
 }
 
 export class MapGenerator {
-    constructor(scene, seed = 'JergBuilder_Default') {
+    constructor(scene, seed = 'JergBuilder_Default', mapSize = 48) {
         this.scene = scene;
         this.seed = seed;
-        this.mapSize = 24;
         
+        // Expanded Map Dimensions & Water Baseline
+        this.mapSize = mapSize; 
+        this.waterLevel = 3;
+
         this.prng = new SeededRandom(this.seed);
         this.noise = new FastNoise(this.prng);
 
@@ -95,7 +98,17 @@ export class MapGenerator {
                 tex.minFilter = THREE.NearestFilter;
             },
             undefined,
-            (err) => console.warn('Texture load failed, using fallback color.', err)
+            (err) => console.warn('Grass texture load failed, using fallback.', err)
+        );
+
+        const waterTexture = textureLoader.load(
+            'https://raw.githubusercontent.com/jergan-studio/JergBuilder/main/Assets/image_2026-07-30_160548757.png',
+            (tex) => {
+                tex.magFilter = THREE.NearestFilter;
+                tex.minFilter = THREE.NearestFilter;
+            },
+            undefined,
+            (err) => console.warn('Water texture load failed, using fallback color.', err)
         );
 
         return {
@@ -103,7 +116,15 @@ export class MapGenerator {
             dirt: new THREE.MeshLambertMaterial({ color: 0x5c4033 }),
             stone: new THREE.MeshLambertMaterial({ color: 0x777777 }),
             
-            // --- NEW INVENTORY BLOCKS ---
+            // --- WATER MATERIAL ---
+            water: new THREE.MeshLambertMaterial({ 
+                map: waterTexture,
+                color: 0x3388ff,
+                transparent: true, 
+                opacity: 0.75 
+            }),
+
+            // --- INVENTORY / COLOR BLOCKS ---
             gray: new THREE.MeshLambertMaterial({ color: 0x808080 }),
             blue: new THREE.MeshLambertMaterial({ color: 0x1e90ff }),
             red: new THREE.MeshLambertMaterial({ color: 0xff3333 }),
@@ -128,21 +149,28 @@ export class MapGenerator {
 
         for (let x = -halfSize; x < halfSize; x++) {
             for (let z = -halfSize; z < halfSize; z++) {
-                const nx = x * 0.08;
-                const nz = z * 0.08;
+                // Multi-scale noise for large world seeds
+                const nx = x * 0.05;
+                const nz = z * 0.05;
                 const rawHeight = this.noise.get2D(nx + 100, nz + 100);
-                const maxTerrainHeight = Math.floor(rawHeight * 8) + 2;
+                const maxTerrainHeight = Math.floor(rawHeight * 12) + 1;
 
+                // Terrain Block Generation
                 for (let y = 0; y <= maxTerrainHeight; y++) {
                     let mat = this.materials.stone;
 
                     if (y === maxTerrainHeight) {
-                        mat = this.materials.grass;
+                        mat = (y <= this.waterLevel) ? this.materials.dirt : this.materials.grass;
                     } else if (y >= maxTerrainHeight - 2) {
                         mat = this.materials.dirt;
                     }
 
                     this.addBlock(x, y, z, mat);
+                }
+
+                // Water Generation (Fills lower valleys up to waterLevel)
+                for (let y = maxTerrainHeight + 1; y <= this.waterLevel; y++) {
+                    this.addBlock(x, y, z, this.materials.water);
                 }
             }
         }
