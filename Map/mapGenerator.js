@@ -74,7 +74,7 @@ export class MapGenerator {
         this.scene = scene;
         this.seed = seed;
         
-        // Expanded Map Dimensions & Water Baseline
+        // Expanded Map Size & Water Height Level
         this.mapSize = mapSize; 
         this.waterLevel = 3;
 
@@ -98,7 +98,7 @@ export class MapGenerator {
                 tex.minFilter = THREE.NearestFilter;
             },
             undefined,
-            (err) => console.warn('Grass texture load failed, using fallback.', err)
+            (err) => console.warn('Grass texture load failed, using fallback color.', err)
         );
 
         const waterTexture = textureLoader.load(
@@ -116,7 +116,7 @@ export class MapGenerator {
             dirt: new THREE.MeshLambertMaterial({ color: 0x5c4033 }),
             stone: new THREE.MeshLambertMaterial({ color: 0x777777 }),
             
-            // --- WATER MATERIAL ---
+            // --- WATER BLOCK MATERIAL ---
             water: new THREE.MeshLambertMaterial({ 
                 map: waterTexture,
                 color: 0x3388ff,
@@ -135,6 +135,11 @@ export class MapGenerator {
         };
     }
 
+    // Allows mods in main.js to add custom block materials easily
+    registerModMaterial(materialKey, material) {
+        this.materials[materialKey] = material;
+    }
+
     setSeed(newSeed) {
         this.seed = newSeed;
         this.prng.setSeed(newSeed);
@@ -149,13 +154,13 @@ export class MapGenerator {
 
         for (let x = -halfSize; x < halfSize; x++) {
             for (let z = -halfSize; z < halfSize; z++) {
-                // Multi-scale noise for large world seeds
+                // Multi-scale noise calculation for bigger worlds
                 const nx = x * 0.05;
                 const nz = z * 0.05;
                 const rawHeight = this.noise.get2D(nx + 100, nz + 100);
                 const maxTerrainHeight = Math.floor(rawHeight * 12) + 1;
 
-                // Terrain Block Generation
+                // Terrain Generation
                 for (let y = 0; y <= maxTerrainHeight; y++) {
                     let mat = this.materials.stone;
 
@@ -168,7 +173,7 @@ export class MapGenerator {
                     this.addBlock(x, y, z, mat);
                 }
 
-                // Water Generation (Fills lower valleys up to waterLevel)
+                // Water Level Filling
                 for (let y = maxTerrainHeight + 1; y <= this.waterLevel; y++) {
                     this.addBlock(x, y, z, this.materials.water);
                 }
