@@ -2,264 +2,266 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 export class Player {
-    constructor(scene, camera, mapGenerator) {
+    constructor(scene, camera, worldBlocks = []) {
         this.scene = scene;
         this.camera = camera;
-        this.mapGenerator = mapGenerator;
+        this.worldBlocks = worldBlocks;
 
-        // Position & Angles
+        this.scale = 0.5;
+        this.width = 0.6 * this.scale;
+        this.height = 1.8 * this.scale;
+        this.eyeHeight = 1.6 * this.scale;
+
         this.position = new THREE.Vector3(0, 20, 0);
-        this.velocity = new THREE.Vector3(0, 0, 0);
+        this.velocity = new THREE.Vector3();
+
+        this.moveSpeed = 8;
+        this.jumpForce = 10;
+        this.gravity = 28;
+        this.isGrounded = false;
+
+        this.isThirdPerson = false;
+        this.thirdPersonDistance = 4;
+
+        this.keys = { forward: false, backward: false, left: false, right: false, jump: false };
         this.pitch = 0;
         this.yaw = 0;
 
-        // Physical Dimensions
-        this.radius = 0.35;
-        this.height = 1.8;
+        this.raycaster = new THREE.Raycaster();
+        this.reachDistance = 8;
 
-        // Physics Settings
-        this.speed = 8.0;
-        this.jumpForce = 11.0;
-        this.gravity = 28.0;
-        this.onGround = false;
-
-        // Camera Modes: 0 = 1st Person | 1 = 3rd Person Back | 2 = 2nd Person Front
-        this.viewMode = 0;
-        this.cameraDistance = 4.5;
-
-        // Inventory State
-        this.selectedSlot = 1;
-
-        // Key Press Map
-        this.keys = { forward: false, backward: false, left: false, right: false, jump: false };
-
-        this.mesh = null;
-        this.loadModel();
-        this.setupInputs();
-        this.setupPointerLock();
-        this.updateHotbarUI();
+        this.model = null;
+        this.loadPlayerModel();
+        this.setupControls();
     }
 
-    loadModel() {
+    loadPlayerModel() {
         const loader = new GLTFLoader();
-        loader.load(
-            './jergplr.glb',
-            (gltf) => {
-                if (this.mesh) this.scene.remove(this.mesh);
+        const modelUrl = 'https://raw.githubusercontent.com/jergan-studio/JergBuilder/main/jergplr.glb';
 
-                this.mesh = gltf.scene;
-                this.mesh.scale.set(1.0, 1.0, 1.0);
-
-                this.mesh.traverse((child) => {
-                    if (child.isMesh) {
-                        child.castShadow = true;
-                        child.receiveShadow = true;
-                    }
-                });
-
-                this.scene.add(this.mesh);
-                console.log("✅ jergplr.glb model active!");
-            },
-            undefined,
-            () => {
-                this.createFallbackMesh();
-            }
-        );
+        loader.load(modelUrl, (gltf) => {
+            this.model = gltf.scene;
+            this.model.scale.set(this.scale, this.scale, this.scale);
+            this.scene.add(this.model);
+            this.model.visible = this.isThirdPerson;
+        }, undefined, (error) => console.warn("GLB model failed to load:", error));
     }
 
-    createFallbackMesh() {
-        this.mesh = new THREE.Group();
-        const mat = new THREE.MeshStandardMaterial({ color: 0x777777, roughness: 0.5 });
-        const head = new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 16), mat);
-        head.position.y = 1.4;
-        const body = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 1.0, 16), mat);
-        body.position.y = 0.5;
-        this.mesh.add(head, body);
-        this.scene.add(this.mesh);
-    }
-
-    setupPointerLock() {
-        document.body.addEventListener('click', () => {
-            if (!document.pointerLockElement) {
-                document.body.requestPointerLock();
-            }
-        });
-    }
-
-    setupInputs() {
-        // Keyboard Binds
+    setupControls() {
         window.addEventListener('keydown', (e) => {
-            if (e.code === 'KeyW') this.keys.forward = true;
-            if (e.code === 'KeyS') this.keys.backward = true;
-            if (e.code === 'KeyA') this.keys.left = true;
-            if (e.code === 'KeyD') this.keys.right = true;
-            if (e.code === 'Space') this.keys.jump = true;
+            this.updateKey(e.code, true);
 
-            // Camera Mode Toggle Hotkey: ]
-            if (e.code === 'BracketRight') {
-                this.viewMode = (this.viewMode + 1) % 3;
-            }
-
-            // Inventory Hotbar Selection (1 to 8)
-            if (e.key >= '1' && e.key <= '8') {
-                this.selectedSlot = parseInt(e.key);
-                this.updateHotbarUI();
+            if (e.code === 'BracketLeft' || e.key === '[') {
+                e.preventDefault();
+                this.isThirdPerson = !this.isThirdPerson;
+                if (this.model) this.model.visible = this.isThirdPerson;
             }
         });
 
-        window.addEventListener('keyup', (e) => {
-            if (e.code === 'KeyW') this.keys.forward = false;
-            if (e.code === 'KeyS') this.keys.backward = false;
-            if (e.code === 'KeyA') this.keys.left = false;
-            if (e.code === 'KeyD') this.keys.right = false;
-            if (e.code === 'Space') this.keys.jump = false;
-        });
+        window.addEventListener('keyup', (e) => this.updateKey(e.code, false));
 
-        // Mouse Rotation Look
         window.addEventListener('mousemove', (e) => {
             if (document.pointerLockElement) {
-                const sensitivity = 0.0022;
-                this.yaw -= e.movementX * sensitivity;
-                this.pitch -= e.movementY * sensitivity;
-
-                const clampAngle = Math.PI / 2 - 0.05;
-                this.pitch = Math.max(-clampAngle, Math.min(clampAngle, this.pitch));
+                this.yaw -= e.movementX * 0.002;
+                this.pitch -= e.movementY * 0.002;
+                this.pitch = Math.max(-Math.PI / 2.05, Math.min(Math.PI / 2.05, this.pitch));
             }
         });
     }
 
-    updateHotbarUI() {
-        const slots = document.querySelectorAll('.hotbar-slot, [data-slot]');
-        slots.forEach((slot, idx) => {
-            if (idx + 1 === this.selectedSlot) {
-                slot.classList.add('active');
-                slot.style.border = '2px solid #ffffff';
-            } else {
-                slot.classList.remove('active');
-                slot.style.border = '2px solid transparent';
+    updateKey(code, isPressed) {
+        switch (code) {
+            case 'KeyW': case 'ArrowUp': this.keys.forward = isPressed; break;
+            case 'KeyS': case 'ArrowDown': this.keys.backward = isPressed; break;
+            case 'KeyA': case 'ArrowLeft': this.keys.left = isPressed; break;
+            case 'KeyD': case 'ArrowRight': this.keys.right = isPressed; break;
+            case 'Space': this.keys.jump = isPressed; break;
+        }
+    }
+
+    getTerrainMeshes() {
+        let meshes = [];
+        if (Array.isArray(this.worldBlocks) && this.worldBlocks.length > 0) {
+            meshes = this.worldBlocks;
+        } else if (this.worldBlocks && this.worldBlocks.children) {
+            meshes = this.worldBlocks.children;
+        } else {
+            this.scene.traverse((child) => {
+                if (child.isMesh && child !== this.model) {
+                    meshes.push(child);
+                }
+            });
+        }
+        return meshes;
+    }
+
+    getLookAtBlock() {
+        const meshes = this.getTerrainMeshes();
+        if (meshes.length === 0) return null;
+
+        const headPosition = new THREE.Vector3(
+            this.position.x,
+            this.position.y + this.eyeHeight,
+            this.position.z
+        );
+
+        const lookDir = new THREE.Vector3(0, 0, -1);
+        lookDir.applyEuler(new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ'));
+
+        this.raycaster.set(headPosition, lookDir);
+        this.raycaster.far = this.reachDistance;
+
+        const intersects = this.raycaster.intersectObjects(meshes, true);
+
+        if (intersects.length > 0) {
+            const hit = intersects[0];
+            const point = hit.point;
+            const normal = hit.face ? hit.face.normal.clone() : new THREE.Vector3(0, 1, 0);
+
+            if (hit.object) {
+                normal.applyQuaternion(hit.object.getWorldQuaternion(new THREE.Quaternion()));
             }
-        });
+
+            const targetBlock = new THREE.Vector3(
+                Math.floor(point.x - normal.x * 0.4),
+                Math.floor(point.y - normal.y * 0.4),
+                Math.floor(point.z - normal.z * 0.4)
+            );
+
+            const placeBlock = new THREE.Vector3(
+                Math.floor(point.x + normal.x * 0.4),
+                Math.floor(point.y + normal.y * 0.4),
+                Math.floor(point.z + normal.z * 0.4)
+            );
+
+            return { targetBlock, placeBlock, hit };
+        }
+
+        return null;
+    }
+
+    resolveCollisions() {
+        const meshes = this.getTerrainMeshes();
+        if (meshes.length === 0) return;
+
+        const halfW = this.width / 2;
+
+        // Ground check
+        const footOffsets = [
+            new THREE.Vector3(0, 0, 0),
+            new THREE.Vector3(halfW * 0.8, 0, halfW * 0.8),
+            new THREE.Vector3(-halfW * 0.8, 0, halfW * 0.8),
+            new THREE.Vector3(halfW * 0.8, 0, -halfW * 0.8),
+            new THREE.Vector3(-halfW * 0.8, 0, -halfW * 0.8)
+        ];
+
+        let landed = false;
+
+        for (let pt of footOffsets) {
+            const rayOrigin = this.position.clone().add(pt);
+            rayOrigin.y += 0.4;
+
+            this.raycaster.set(rayOrigin, new THREE.Vector3(0, -1, 0));
+            this.raycaster.far = 0.5;
+
+            const hits = this.raycaster.intersectObjects(meshes, true);
+
+            if (hits.length > 0 && this.velocity.y <= 0) {
+                const hit = hits[0];
+                this.position.y = hit.point.y;
+                this.velocity.y = 0;
+                this.isGrounded = true;
+                landed = true;
+                break;
+            }
+        }
+
+        if (!landed) this.isGrounded = false;
+
+        // Wall check
+        const heights = [0.2, this.height * 0.5, this.height - 0.1];
+        const directions = [
+            new THREE.Vector3(1, 0, 0),
+            new THREE.Vector3(-1, 0, 0),
+            new THREE.Vector3(0, 0, 1),
+            new THREE.Vector3(0, 0, -1)
+        ];
+
+        for (let h of heights) {
+            const center = this.position.clone();
+            center.y += h;
+
+            for (let dir of directions) {
+                this.raycaster.set(center, dir);
+                this.raycaster.far = halfW + 0.08;
+
+                const hits = this.raycaster.intersectObjects(meshes, true);
+                if (hits.length > 0) {
+                    const hit = hits[0];
+                    const overlap = (halfW + 0.08) - hit.distance;
+                    this.position.sub(dir.clone().multiplyScalar(overlap));
+                }
+            }
+        }
     }
 
     update(delta) {
-        if (!delta || delta > 0.1) delta = 0.016;
+        const moveDir = new THREE.Vector3();
+        if (this.keys.forward) moveDir.z -= 1;
+        if (this.keys.backward) moveDir.z += 1;
+        if (this.keys.left) moveDir.x -= 1;
+        if (this.keys.right) moveDir.x += 1;
 
-        // 1. Calculate Standard Movement Relative to Yaw
-        const moveVector = new THREE.Vector3();
-        if (this.keys.forward) moveVector.z -= 1;
-        if (this.keys.backward) moveVector.z += 1;
-        if (this.keys.left) moveVector.x -= 1;
-        if (this.keys.right) moveVector.x += 1;
+        moveDir.normalize();
+        moveDir.applyEuler(new THREE.Euler(0, this.yaw, 0, 'YXZ'));
 
-        if (moveVector.lengthSq() > 0) {
-            moveVector.normalize();
+        this.velocity.x = moveDir.x * this.moveSpeed;
+        this.velocity.z = moveDir.z * this.moveSpeed;
 
-            const cos = Math.cos(this.yaw);
-            const sin = Math.sin(this.yaw);
-
-            this.velocity.x = (moveVector.x * cos - moveVector.z * sin) * this.speed;
-            this.velocity.z = (moveVector.x * sin + moveVector.z * cos) * this.speed;
-        } else {
-            this.velocity.x = 0;
-            this.velocity.z = 0;
-        }
-
-        // 2. Physics Gravity & Jumping
-        if (!this.onGround) {
-            this.velocity.y -= this.gravity * delta;
-        } else if (this.keys.jump) {
+        if (this.isGrounded && this.keys.jump) {
             this.velocity.y = this.jumpForce;
-            this.onGround = false;
+            this.isGrounded = false;
         }
 
-        // 3. Horizontal Collision Checks
-        const nextX = this.position.x + this.velocity.x * delta;
-        const nextZ = this.position.z + this.velocity.z * delta;
+        this.velocity.y -= this.gravity * delta;
 
-        if (!this.checkBlockCollision(nextX, this.position.y, this.position.z)) {
-            this.position.x = nextX;
-        }
-        if (!this.checkBlockCollision(this.position.x, this.position.y, nextZ)) {
-            this.position.z = nextZ;
-        }
+        // Sub-stepping movement to stop tunneling
+        const steps = Math.max(1, Math.ceil(Math.abs(this.velocity.y * delta) / 0.2));
+        const subDelta = delta / steps;
 
-        // 4. Vertical Landing Check
-        this.position.y += this.velocity.y * delta;
+        for (let i = 0; i < steps; i++) {
+            this.position.x += (this.velocity.x * subDelta);
+            this.position.z += (this.velocity.z * subDelta);
+            this.position.y += (this.velocity.y * subDelta);
 
-        let terrainY = -100;
-        if (this.mapGenerator && typeof this.mapGenerator.getTerrainHeight === 'function') {
-            terrainY = this.mapGenerator.getTerrainHeight(this.position.x, this.position.z);
+            this.resolveCollisions();
         }
 
-        const standingHeight = terrainY + 1.0;
-
-        if (this.position.y <= standingHeight) {
-            this.position.y = standingHeight;
-            this.velocity.y = 0;
-            this.onGround = true;
-        } else {
-            this.onGround = false;
-        }
-
-        // 5. Falling Off Void Safety Net
-        if (this.position.y < -25) {
-            this.position.set(0, 20, 0);
+        if (this.position.y <= -30) {
+            this.position.set(0, 25, 0);
             this.velocity.set(0, 0, 0);
         }
 
-        // 6. Synchronize Mesh & Camera
-        if (this.mesh) {
-            this.mesh.position.copy(this.position);
-            this.mesh.rotation.y = this.yaw;
-            this.mesh.visible = (this.viewMode !== 0);
+        if (this.model) {
+            this.model.position.copy(this.position);
+            this.model.rotation.y = this.yaw;
+            this.model.visible = this.isThirdPerson;
         }
 
-        this.updateCamera();
-    }
+        const headPosition = new THREE.Vector3(
+            this.position.x,
+            this.position.y + this.eyeHeight,
+            this.position.z
+        );
 
-    checkBlockCollision(targetX, targetY, targetZ) {
-        if (!this.mapGenerator || !this.mapGenerator.blocks) return false;
-
-        const feetY = Math.floor(targetY);
-        const headY = Math.floor(targetY + this.height - 0.1);
-
-        for (let y = feetY; y <= headY; y++) {
-            const gx = Math.round(targetX);
-            const gz = Math.round(targetZ);
-
-            if (this.mapGenerator.blocks.has(`${gx},${y},${gz}`)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    updateCamera() {
-        if (!this.camera) return;
-
-        const eyePos = this.position.clone();
-        eyePos.y += 1.5;
-
-        const camEuler = new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ');
-
-        if (this.viewMode === 0) {
-            // First Person
-            this.camera.position.copy(eyePos);
-            this.camera.rotation.copy(camEuler);
+        if (this.isThirdPerson) {
+            const cameraOffset = new THREE.Vector3(0, 0, this.thirdPersonDistance);
+            cameraOffset.applyEuler(new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ'));
+            this.camera.position.copy(headPosition).add(cameraOffset);
+            this.camera.lookAt(headPosition);
         } else {
-            const forwardDir = new THREE.Vector3(0, 0, -1).applyEuler(camEuler);
-
-            if (this.viewMode === 1) {
-                // Third Person Back
-                const camPos = eyePos.clone().sub(forwardDir.clone().multiplyScalar(this.cameraDistance));
-                this.camera.position.copy(camPos);
-                this.camera.lookAt(eyePos);
-            } else if (this.viewMode === 2) {
-                // Second Person Front
-                const camPos = eyePos.clone().add(forwardDir.clone().multiplyScalar(this.cameraDistance));
-                this.camera.position.copy(camPos);
-                this.camera.lookAt(eyePos);
-            }
+            this.camera.position.copy(headPosition);
+            this.camera.quaternion.setFromEuler(new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ'));
         }
     }
 }
