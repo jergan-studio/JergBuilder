@@ -7,43 +7,30 @@ export class Player {
         this.camera = camera;
         this.mapGenerator = mapGenerator;
 
-        // --- POSITION & ORIENTATION ---
-        this.position = new THREE.Vector3(0, 18, 0);
+        // Position & Angles
+        this.position = new THREE.Vector3(0, 20, 0);
         this.velocity = new THREE.Vector3(0, 0, 0);
-        
-        // Pitch (X) and Yaw (Y) Euler setup
         this.pitch = 0;
         this.yaw = 0;
 
-        // --- COLLISION BOUNDS ---
+        // Physical Dimensions
         this.radius = 0.35;
         this.height = 1.8;
 
-        // --- MOVEMENT TUNING ---
+        // Physics Settings
         this.speed = 8.0;
         this.jumpForce = 11.0;
         this.gravity = 28.0;
         this.onGround = false;
 
-        // --- PERSPECTIVE STATES ---
-        // 0 = 1st Person | 1 = 3rd Person Back | 2 = 2nd Person Front
+        // Camera Modes: 0 = 1st Person | 1 = 3rd Person Back | 2 = 2nd Person Front
         this.viewMode = 0;
-        this.cameraDistance = 4.2;
+        this.cameraDistance = 4.5;
 
-        // --- INVENTORY / HOTBAR SELECTION ---
+        // Inventory State
         this.selectedSlot = 1;
-        this.blockTypes = {
-            1: 'grass',
-            2: 'stone',
-            3: 'water', // Uses new water texture
-            4: 'red',
-            5: 'pink',
-            6: 'darkgreen',
-            7: 'lightgreen',
-            8: 'yellow'
-        };
 
-        // --- KEYBOARD STATES ---
+        // Key Press Map
         this.keys = { forward: false, backward: false, left: false, right: false, jump: false };
 
         this.mesh = null;
@@ -71,7 +58,7 @@ export class Player {
                 });
 
                 this.scene.add(this.mesh);
-                console.log("✅ jergplr.glb loaded successfully!");
+                console.log("✅ jergplr.glb model active!");
             },
             undefined,
             () => {
@@ -92,17 +79,15 @@ export class Player {
     }
 
     setupPointerLock() {
-        // Request pointer lock on canvas click so mouse controls character view
-        const domElement = document.body;
-        domElement.addEventListener('click', () => {
+        document.body.addEventListener('click', () => {
             if (!document.pointerLockElement) {
-                domElement.requestPointerLock();
+                document.body.requestPointerLock();
             }
         });
     }
 
     setupInputs() {
-        // --- WASD & HOTBAR KEY LISTENERS ---
+        // Keyboard Binds
         window.addEventListener('keydown', (e) => {
             if (e.code === 'KeyW') this.keys.forward = true;
             if (e.code === 'KeyS') this.keys.backward = true;
@@ -110,12 +95,12 @@ export class Player {
             if (e.code === 'KeyD') this.keys.right = true;
             if (e.code === 'Space') this.keys.jump = true;
 
-            // Perspective switch toggle bracket
+            // Camera Mode Toggle Hotkey: ]
             if (e.code === 'BracketRight') {
                 this.viewMode = (this.viewMode + 1) % 3;
             }
 
-            // Inventory Hotbar Slots 1 through 8 Selection
+            // Inventory Hotbar Selection (1 to 8)
             if (e.key >= '1' && e.key <= '8') {
                 this.selectedSlot = parseInt(e.key);
                 this.updateHotbarUI();
@@ -130,45 +115,36 @@ export class Player {
             if (e.code === 'Space') this.keys.jump = false;
         });
 
-        // Mouse Delta Look
+        // Mouse Rotation Look
         window.addEventListener('mousemove', (e) => {
             if (document.pointerLockElement) {
                 const sensitivity = 0.0022;
                 this.yaw -= e.movementX * sensitivity;
                 this.pitch -= e.movementY * sensitivity;
 
-                // Clamp looking pitch angle
-                const maxPitch = Math.PI / 2 - 0.05;
-                this.pitch = Math.max(-maxPitch, Math.min(maxPitch, this.pitch));
+                const clampAngle = Math.PI / 2 - 0.05;
+                this.pitch = Math.max(-clampAngle, Math.min(clampAngle, this.pitch));
             }
         });
     }
 
     updateHotbarUI() {
         const slots = document.querySelectorAll('.hotbar-slot, [data-slot]');
-        slots.forEach((slot, index) => {
-            const slotNum = index + 1;
-            if (slotNum === this.selectedSlot) {
+        slots.forEach((slot, idx) => {
+            if (idx + 1 === this.selectedSlot) {
                 slot.classList.add('active');
                 slot.style.border = '2px solid #ffffff';
-                slot.style.boxShadow = '0 0 8px #ffffff';
             } else {
                 slot.classList.remove('active');
                 slot.style.border = '2px solid transparent';
-                slot.style.boxShadow = 'none';
             }
         });
-        console.log(`📦 Active Slot: ${this.selectedSlot} (${this.blockTypes[this.selectedSlot]})`);
-    }
-
-    getSelectedBlockType() {
-        return this.blockTypes[this.selectedSlot];
     }
 
     update(delta) {
         if (!delta || delta > 0.1) delta = 0.016;
 
-        // 1. Calculate Standard World WASD Direction Vectors
+        // 1. Calculate Standard Movement Relative to Yaw
         const moveVector = new THREE.Vector3();
         if (this.keys.forward) moveVector.z -= 1;
         if (this.keys.backward) moveVector.z += 1;
@@ -177,8 +153,7 @@ export class Player {
 
         if (moveVector.lengthSq() > 0) {
             moveVector.normalize();
-            
-            // Rotate direction relative to yaw angle
+
             const cos = Math.cos(this.yaw);
             const sin = Math.sin(this.yaw);
 
@@ -189,7 +164,7 @@ export class Player {
             this.velocity.z = 0;
         }
 
-        // 2. Gravity and Jump Physics
+        // 2. Physics Gravity & Jumping
         if (!this.onGround) {
             this.velocity.y -= this.gravity * delta;
         } else if (this.keys.jump) {
@@ -197,18 +172,18 @@ export class Player {
             this.onGround = false;
         }
 
-        // 3. Axis-Separated Wall Collisions
-        const targetX = this.position.x + this.velocity.x * delta;
-        const targetZ = this.position.z + this.velocity.z * delta;
+        // 3. Horizontal Collision Checks
+        const nextX = this.position.x + this.velocity.x * delta;
+        const nextZ = this.position.z + this.velocity.z * delta;
 
-        if (!this.checkBlockCollision(targetX, this.position.y, this.position.z)) {
-            this.position.x = targetX;
+        if (!this.checkBlockCollision(nextX, this.position.y, this.position.z)) {
+            this.position.x = nextX;
         }
-        if (!this.checkBlockCollision(this.position.x, this.position.y, targetZ)) {
-            this.position.z = targetZ;
+        if (!this.checkBlockCollision(this.position.x, this.position.y, nextZ)) {
+            this.position.z = nextZ;
         }
 
-        // 4. Vertical Land and Step Collision Check
+        // 4. Vertical Landing Check
         this.position.y += this.velocity.y * delta;
 
         let terrainY = -100;
@@ -216,23 +191,23 @@ export class Player {
             terrainY = this.mapGenerator.getTerrainHeight(this.position.x, this.position.z);
         }
 
-        const feetHeight = terrainY + 1.0;
+        const standingHeight = terrainY + 1.0;
 
-        if (this.position.y <= feetHeight) {
-            this.position.y = feetHeight;
+        if (this.position.y <= standingHeight) {
+            this.position.y = standingHeight;
             this.velocity.y = 0;
             this.onGround = true;
         } else {
             this.onGround = false;
         }
 
-        // 5. Void Safety Net (Respawn)
+        // 5. Falling Off Void Safety Net
         if (this.position.y < -25) {
             this.position.set(0, 20, 0);
             this.velocity.set(0, 0, 0);
         }
 
-        // 6. Update Model Transform & Visibility
+        // 6. Synchronize Mesh & Camera
         if (this.mesh) {
             this.mesh.position.copy(this.position);
             this.mesh.rotation.y = this.yaw;
@@ -265,23 +240,22 @@ export class Player {
         const eyePos = this.position.clone();
         eyePos.y += 1.5;
 
-        // Camera Euler Angle Vector
         const camEuler = new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ');
 
         if (this.viewMode === 0) {
-            // First Person View
+            // First Person
             this.camera.position.copy(eyePos);
             this.camera.rotation.copy(camEuler);
         } else {
             const forwardDir = new THREE.Vector3(0, 0, -1).applyEuler(camEuler);
 
             if (this.viewMode === 1) {
-                // Third Person Back View
+                // Third Person Back
                 const camPos = eyePos.clone().sub(forwardDir.clone().multiplyScalar(this.cameraDistance));
                 this.camera.position.copy(camPos);
                 this.camera.lookAt(eyePos);
             } else if (this.viewMode === 2) {
-                // Second Person Front View
+                // Second Person Front
                 const camPos = eyePos.clone().add(forwardDir.clone().multiplyScalar(this.cameraDistance));
                 this.camera.position.copy(camPos);
                 this.camera.lookAt(eyePos);
