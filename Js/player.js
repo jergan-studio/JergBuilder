@@ -2,10 +2,11 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 export class Player {
-    constructor(scene, camera, mapGenerator) {
+    constructor(scene, camera, mapGenerator, modLoader = null) {
         this.scene = scene;
         this.camera = camera;
         this.mapGenerator = mapGenerator;
+        this.modLoader = modLoader;
 
         // Player Physical Dimensions
         this.scale = 0.5;
@@ -26,6 +27,19 @@ export class Player {
         this.isThirdPerson = false;
         this.thirdPersonDistance = 4;
 
+        // Inventory Selection (1-8)
+        this.selectedSlot = 1;
+        this.slotMaterials = {
+            1: 'grass',
+            2: 'dirt',
+            3: 'stone',
+            4: 'water',
+            5: 'red',
+            6: 'green',
+            7: 'blue',
+            8: 'yellow'
+        };
+
         this.keys = { forward: false, backward: false, left: false, right: false, jump: false };
         this.pitch = 0;
         this.yaw = 0;
@@ -36,6 +50,7 @@ export class Player {
         this.model = null;
         this.loadPlayerModel();
         this.setupControls();
+        this.setupBuildingControls();
     }
 
     loadPlayerModel() {
@@ -54,6 +69,12 @@ export class Player {
         window.addEventListener('keydown', (e) => {
             this.updateKey(e.code, true);
 
+            // Hotbar selection keys 1 to 8
+            if (e.key >= '1' && e.key <= '8') {
+                this.selectedSlot = parseInt(e.key);
+                console.log(`📦 Selected Slot ${this.selectedSlot}: ${this.slotMaterials[this.selectedSlot]}`);
+            }
+
             // Toggle Third-Person Camera with "[" key
             if (e.code === 'BracketLeft' || e.key === '[') {
                 e.preventDefault();
@@ -71,6 +92,40 @@ export class Player {
                 this.pitch = Math.max(-Math.PI / 2.05, Math.min(Math.PI / 2.05, this.pitch));
             }
         });
+    }
+
+    setupBuildingControls() {
+        window.addEventListener('mousedown', (e) => {
+            if (!document.pointerLockElement) return;
+
+            const lookData = this.getLookAtBlock();
+            if (!lookData) return;
+
+            if (e.button === 0) {
+                // Left Click: Break Block
+                const { targetBlock } = lookData;
+                this.mapGenerator.removeBlock(targetBlock.x, targetBlock.y, targetBlock.z);
+
+                // Mod Hook
+                if (this.modLoader) {
+                    this.modLoader.trigger('onBlockBreak', targetBlock, this);
+                }
+            } else if (e.button === 2) {
+                // Right Click: Place Block
+                const { placeBlock } = lookData;
+                const matKey = this.slotMaterials[this.selectedSlot] || 'grass';
+                const mat = this.mapGenerator.materials[matKey] || this.mapGenerator.materials.grass;
+
+                const placedBlock = this.mapGenerator.addBlock(placeBlock.x, placeBlock.y, placeBlock.z, mat);
+
+                // Mod Hook
+                if (this.modLoader && placedBlock) {
+                    this.modLoader.trigger('onBlockPlace', placeBlock, matKey, this);
+                }
+            }
+        });
+
+        window.addEventListener('contextmenu', (e) => e.preventDefault());
     }
 
     updateKey(code, isPressed) {
@@ -258,6 +313,11 @@ export class Player {
         } else {
             this.camera.position.copy(headPosition);
             this.camera.quaternion.setFromEuler(new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ'));
+        }
+
+        // Trigger Mod Loader Player Tick
+        if (this.modLoader) {
+            this.modLoader.trigger('onPlayerTick', this, delta);
         }
     }
 }
