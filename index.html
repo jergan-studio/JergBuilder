@@ -18,10 +18,10 @@
             height: 100%;
             overflow: hidden;
             font-family: 'Courier New', Courier, monospace;
-            background-color: #87ceeb;
+            background-color: #87ceeb; /* Sky blue background fallback */
         }
 
-        /* THREE.JS CANVAS FIX */
+        /* THREE.JS CANVAS */
         canvas {
             position: absolute;
             top: 0;
@@ -43,13 +43,13 @@
             align-items: center;
             justify-content: center;
             z-index: 9999;
-            pointer-events: none; /* Allows canvas interactions underneath */
+            pointer-events: none; /* Allows pointer clicks to pass through transparent areas */
             background: transparent;
         }
 
         /* MENU PANELS */
         .menu-panel {
-            pointer-events: auto; /* Enables mouse clicks on buttons */
+            pointer-events: auto; /* Re-enables clicks for buttons inside panels */
             display: flex;
             flex-direction: column;
             gap: 14px;
@@ -191,3 +191,108 @@
             width: 320px;
             z-index: 100;
             pointer-events: none;
+        }
+
+        #chat-messages {
+            max-height: 160px;
+            overflow-y: auto;
+            margin-bottom: 6px;
+            text-shadow: 1px 1px 3px #000;
+            color: #fff;
+            font-size: 13px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        #chat-input {
+            width: 100%;
+            padding: 8px 10px;
+            background: rgba(0, 0, 0, 0.75);
+            border: 2px solid #fff;
+            color: #fff;
+            pointer-events: auto;
+            border-radius: 4px;
+            font-family: inherit;
+            outline: none;
+        }
+    </style>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
+
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+
+    <div id="crosshair"></div>
+
+    <div id="hotbar"></div>
+
+    <div id="chat-container">
+        <div id="chat-messages"></div>
+        <input type="text" id="chat-input" class="hidden" placeholder="Press Enter to talk..." maxlength="100">
+    </div>
+
+    <div id="ui-overlay">
+
+        <div id="menu-title" class="menu-panel">
+            <h2>JergBuilder</h2>
+            <button id="btn-worlds" class="menu-btn">Worlds</button>
+            <button id="btn-multiplayer" class="menu-btn">Multiplayer</button>
+            <button id="btn-mods" class="menu-btn">Mods</button>
+            <button id="btn-skin" class="menu-btn">Select Skin</button>
+            <button id="btn-settings" class="menu-btn">Settings</button>
+        </div>
+
+        <div id="menu-worlds" class="menu-panel hidden">
+            <h2>Select World</h2>
+            <button id="btn-play-world" class="menu-btn">Play World</button>
+            <button class="menu-btn btn-back">Back</button>
+        </div>
+
+        <div id="menu-multiplayer" class="menu-panel hidden">
+            <h2>Multiplayer</h2>
+            <input type="text" id="player-username" class="menu-input" placeholder="Username" maxlength="16">
+            <input type="text" id="server-url" class="menu-input" value="https://jergbserver.onrender.com" placeholder="Server URL">
+            <button id="btn-connect-server" class="menu-btn">Join Server</button>
+            <button class="menu-btn btn-back">Back</button>
+        </div>
+
+        <div id="menu-mods" class="menu-panel hidden">
+            <h2>Mod Manager</h2>
+            <p style="font-size: 12px; color: #aaa; text-align: center;">Upload a .js mod file to insert dynamic code.</p>
+            
+            <label for="mod-file-input" class="menu-btn" style="text-align: center; display: block; line-height: 24px;">
+                📁 Load JS Mod File
+            </label>
+            <input type="file" id="mod-file-input" accept=".js" style="display: none;">
+
+            <div id="loaded-mods-list" style="font-size: 13px; color: #00ffcc; text-align: center;"></div>
+
+            <button class="menu-btn btn-back">Back</button>
+        </div>
+
+        <div id="menu-skin" class="menu-panel hidden">
+            <h2>Select Skin</h2>
+            <p style="font-size: 13px; color: #aaa;">Default Skin Active</p>
+            <button class="menu-btn btn-back">Back</button>
+        </div>
+
+        <div id="menu-settings" class="menu-panel hidden">
+            <h2>Settings</h2>
+            <p style="font-size: 13px; color: #aaa;">FOV: 75 | Sensitivity: 1.0</p>
+            <button class="menu-btn btn-back">Back</button>
+        </div>
+
+    </div>
+
+    <script type="module" src="Js/main.js"></script>
+</body>
+</html>
