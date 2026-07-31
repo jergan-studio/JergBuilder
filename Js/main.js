@@ -1,13 +1,11 @@
 import * as THREE from 'three';
 import { Player } from './player.js';
 import { MapGenerator } from '../Map/mapGenerator.js';
-import { NetworkManager } from './network.js';
 
-// --- 1. UI NAVIGATION MANAGER ---
+// --- 1. MENU SYSTEM & NAVIGATION ---
 const panels = {
     title: document.getElementById('menu-title'),
     worlds: document.getElementById('menu-worlds'),
-    multiplayer: document.getElementById('menu-multiplayer'),
     mods: document.getElementById('menu-mods'),
     skin: document.getElementById('menu-skin'),
     settings: document.getElementById('menu-settings')
@@ -23,8 +21,8 @@ function showScreen(screenKey) {
     }
 }
 
-function bindClick(selector, callback) {
-    const el = document.querySelector(selector);
+function bindClick(id, callback) {
+    const el = document.getElementById(id);
     if (el) {
         el.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -34,14 +32,12 @@ function bindClick(selector, callback) {
     }
 }
 
-// Bind main menu panel transitions
-bindClick('#btn-worlds', () => showScreen('worlds'));
-bindClick('#btn-multiplayer', () => showScreen('multiplayer'));
-bindClick('#btn-mods', () => showScreen('mods'));
-bindClick('#btn-skin', () => showScreen('skin'));
-bindClick('#btn-settings', () => showScreen('settings'));
+// Navigation Bindings
+bindClick('btn-worlds', () => showScreen('worlds'));
+bindClick('btn-mods', () => showScreen('mods'));
+bindClick('btn-skin', () => showScreen('skin'));
+bindClick('btn-settings', () => showScreen('settings'));
 
-// Bind back buttons
 document.querySelectorAll('.btn-back').forEach(btn => {
     btn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -50,7 +46,22 @@ document.querySelectorAll('.btn-back').forEach(btn => {
     });
 });
 
-// --- 2. MOD LOADER SYSTEM ---
+// --- 2. SKIN SELECTION SYSTEM ---
+let selectedSkin = 'default';
+document.querySelectorAll('.skin-card').forEach(card => {
+    card.addEventListener('click', () => {
+        document.querySelectorAll('.skin-card').forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+        selectedSkin = card.getAttribute('data-skin');
+        
+        const statusEl = document.getElementById('skin-status');
+        if (statusEl) {
+            statusEl.innerText = `Active Skin: ${selectedSkin.toUpperCase()}`;
+        }
+    });
+});
+
+// --- 3. MOD LOADER SYSTEM ---
 const modFileInput = document.getElementById('mod-file-input');
 const loadedModsList = document.getElementById('loaded-mods-list');
 
@@ -61,20 +72,18 @@ if (modFileInput) {
 
         const reader = new FileReader();
         reader.onload = function(event) {
-            const modScriptCode = event.target.result;
-
             try {
                 const scriptEl = document.createElement('script');
-                scriptEl.textContent = modScriptCode;
+                scriptEl.textContent = event.target.result;
                 document.body.appendChild(scriptEl);
 
                 if (loadedModsList) {
                     loadedModsList.innerText = `Active Mod: ${file.name}`;
                 }
-                alert(`Successfully loaded mod: ${file.name}`);
+                alert(`Loaded Mod: ${file.name}`);
             } catch (err) {
-                console.error("Error executing mod script:", err);
-                alert("Failed to execute mod file. Check console for details.");
+                console.error("Mod Load Error:", err);
+                alert("Failed to run mod file.");
             }
         };
 
@@ -82,20 +91,17 @@ if (modFileInput) {
     });
 }
 
-// --- 3. BACKGROUND MUSIC SYSTEM ---
+// --- 4. BACKGROUND MUSIC ---
 const bgMusic = new Audio('https://github.com/jergan-studio/JergBuilder/raw/refs/heads/main/Assets/monume-roblox-minecraft-fortnite-video-game-music-498036.mp3');
 bgMusic.loop = true;
 bgMusic.volume = 0.3;
 
 function playMusic() {
-    bgMusic.play().catch(err => {
-        console.log("Audio awaiting user interaction:", err);
-    });
+    bgMusic.play().catch(() => {});
 }
-
 window.addEventListener('click', () => playMusic(), { once: true });
 
-// --- 4. INVENTORY & HOTBAR SYSTEM ---
+// --- 5. HOTBAR & INVENTORY ---
 const blockInventory = [
     { name: 'Grass', key: 'grass', color: '#557a2b' },
     { name: 'Gray', key: 'gray', color: '#808080' },
@@ -156,11 +162,10 @@ window.addEventListener('wheel', (e) => {
     }
 });
 
-// --- 5. THREE.JS SCENE SETUP ---
+// --- 6. THREE.JS SCENE INITIALIZATION ---
 let gameStarted = false;
 let player = null;
 let mapGenerator = null;
-let networkManager = null;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
@@ -177,24 +182,34 @@ dirLight.castShadow = true;
 scene.add(dirLight);
 scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 
-// Render hotbar on initial launch
 createHotbarUI();
 
-// --- 6. GAME LAUNCH & POINTER LOCK ---
+// --- 7. SETTINGS HANDLERS ---
+const fovSlider = document.getElementById('fov-slider');
+const fovVal = document.getElementById('fov-value');
+if (fovSlider) {
+    fovSlider.addEventListener('input', (e) => {
+        const val = e.target.value;
+        if (fovVal) fovVal.innerText = val;
+        camera.fov = parseInt(val);
+        camera.updateProjectionMatrix();
+    });
+}
+
+// --- 8. GAME LAUNCH & POINTER LOCK ---
 function launchSingleplayer() {
     playMusic();
-    createHotbarUI();
 
     if (!gameStarted) {
         try {
-            const seed = `seed_${Math.floor(Math.random() * 100000)}`;
+            const seed = `world_${Math.floor(Math.random() * 99999)}`;
             mapGenerator = new MapGenerator(scene, seed);
             mapGenerator.generate();
 
             player = new Player(scene, camera, mapGenerator);
             gameStarted = true;
         } catch (err) {
-            console.error("Singleplayer launch error:", err);
+            console.error("Singleplayer Launch Error:", err);
         }
     }
 
@@ -202,45 +217,9 @@ function launchSingleplayer() {
     renderer.domElement.requestPointerLock();
 }
 
-function launchMultiplayer() {
-    playMusic();
-    createHotbarUI();
-
-    const serverUrl = document.getElementById('server-url')?.value || 'https://jergbserver.onrender.com';
-    const username = document.getElementById('player-username')?.value || `Player_${Math.floor(Math.random() * 1000)}`;
-
-    if (!gameStarted) {
-        try {
-            mapGenerator = new MapGenerator(scene, 'JergBuilder_Default');
-            mapGenerator.generate();
-
-            player = new Player(scene, camera, mapGenerator);
-
-            const gameObject = {
-                scene: scene,
-                renderer: renderer,
-                player: player,
-                mapGenerator: mapGenerator
-            };
-
-            networkManager = new NetworkManager(gameObject, serverUrl, username);
-            gameStarted = true;
-        } catch (err) {
-            console.error("Multiplayer launch error:", err);
-        }
-    }
-
-    document.getElementById('ui-overlay')?.classList.add('hidden');
-    renderer.domElement.requestPointerLock();
-}
-
-bindClick('#btn-play-world', launchSingleplayer);
-bindClick('#btn-connect-server', launchMultiplayer);
+bindClick('btn-play-world', launchSingleplayer);
 
 document.addEventListener('pointerlockchange', () => {
-    const chatInput = document.getElementById('chat-input');
-    if (document.activeElement === chatInput) return;
-
     if (document.pointerLockElement !== renderer.domElement) {
         document.getElementById('ui-overlay')?.classList.remove('hidden');
         showScreen('title');
@@ -251,14 +230,11 @@ document.addEventListener('pointerlockchange', () => {
 
 renderer.domElement.addEventListener('click', () => {
     if (gameStarted && document.pointerLockElement !== renderer.domElement) {
-        const chatInput = document.getElementById('chat-input');
-        if (document.activeElement !== chatInput) {
-            renderer.domElement.requestPointerLock();
-        }
+        renderer.domElement.requestPointerLock();
     }
 });
 
-// --- 7. CONTROLS (BLOCK BREAK / PLACE) ---
+// --- 9. BLOCK BREAK & PLACE CONTROLS ---
 window.addEventListener('contextmenu', (e) => e.preventDefault());
 
 window.addEventListener('mousedown', (e) => {
@@ -268,38 +244,21 @@ window.addEventListener('mousedown', (e) => {
     if (!target) return;
 
     if (e.button === 0) { // Left Click -> Break
-        const bx = target.targetBlock.x;
-        const by = target.targetBlock.y;
-        const bz = target.targetBlock.z;
-
-        mapGenerator.removeBlock(bx, by, bz);
-
-        if (networkManager && networkManager.socket) {
-            networkManager.socket.emit('blockBreak', { x: bx, y: by, z: bz });
-        }
-
-    } else if (e.button === 2) { // Right Click -> Place Active Block
+        mapGenerator.removeBlock(target.targetBlock.x, target.targetBlock.y, target.targetBlock.z);
+    } else if (e.button === 2) { // Right Click -> Place
         const activeKey = blockInventory[selectedSlotIndex].key;
         const selectedMaterial = mapGenerator.materials[activeKey] || mapGenerator.materials.grass;
 
-        const px = target.placeBlock.x;
-        const py = target.placeBlock.y;
-        const pz = target.placeBlock.z;
-
-        mapGenerator.addBlock(px, py, pz, selectedMaterial);
-
-        if (networkManager && networkManager.socket) {
-            networkManager.socket.emit('blockPlace', {
-                x: px,
-                y: py,
-                z: pz,
-                material: activeKey
-            });
-        }
+        mapGenerator.addBlock(
+            target.placeBlock.x, 
+            target.placeBlock.y, 
+            target.placeBlock.z, 
+            selectedMaterial
+        );
     }
 });
 
-// Resize window handler
+// Window Resize
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
@@ -315,10 +274,6 @@ function animate() {
 
     if (gameStarted && player) {
         player.update(delta);
-
-        if (networkManager) {
-            networkManager.update();
-        }
     } else {
         const time = clock.getElapsedTime() * 0.15;
         camera.position.set(Math.sin(time) * 25, 18, Math.cos(time) * 25);
