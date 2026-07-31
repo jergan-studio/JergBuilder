@@ -43,13 +43,13 @@
             align-items: center;
             justify-content: center;
             z-index: 9999;
-            pointer-events: none; /* Allows pointer clicks to pass through transparent areas */
+            pointer-events: none; /* Allows canvas clicks through transparent areas */
             background: transparent;
         }
 
         /* MENU PANELS */
         .menu-panel {
-            pointer-events: auto; /* Re-enables clicks for buttons inside panels */
+            pointer-events: auto; /* Re-enables clicks for inner buttons */
             display: flex;
             flex-direction: column;
             gap: 14px;
@@ -75,7 +75,7 @@
             display: none !important;
         }
 
-        /* INPUT FIELD STYLES */
+        /* INPUT FIELDS */
         .menu-input {
             width: 100%;
             padding: 10px 14px;
@@ -111,7 +111,7 @@
             border-color: #fff;
         }
 
-        /* CROSSHAIR */
+        /* CROSSHAIR HUD */
         #crosshair {
             position: absolute;
             top: 50%;
