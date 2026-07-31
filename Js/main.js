@@ -34,12 +34,14 @@ function bindClick(selector, callback) {
     }
 }
 
+// Bind Menu Buttons
 bindClick('#btn-worlds', () => showScreen('worlds'));
 bindClick('#btn-multiplayer', () => showScreen('multiplayer'));
 bindClick('#btn-mods', () => showScreen('mods'));
 bindClick('#btn-skin', () => showScreen('skin'));
 bindClick('#btn-settings', () => showScreen('settings'));
 
+// Back Buttons
 document.querySelectorAll('.btn-back').forEach(btn => {
     btn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -177,9 +179,9 @@ scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 
 createHotbarUI();
 
-// --- 6. GAME LAUNCH & MULTIPLAYER ---
+// --- 6. GAME LAUNCHERS ---
 
-// Singleplayer World Launch
+// Singleplayer Launcher
 function launchSingleplayer() {
     playMusic();
 
@@ -200,7 +202,7 @@ function launchSingleplayer() {
     renderer.domElement.requestPointerLock();
 }
 
-// Multiplayer Server Join
+// Multiplayer Server Launcher
 function launchMultiplayer() {
     playMusic();
 
@@ -209,11 +211,13 @@ function launchMultiplayer() {
 
     if (!gameStarted) {
         try {
-            // Initialize local terrain generator (overridden when connected)
+            // Local Map & Player setup
             mapGenerator = new MapGenerator(scene, 'JergBuilder_Default');
+            mapGenerator.generate();
+
             player = new Player(scene, camera, mapGenerator);
 
-            // Connect to server
+            // Connect to JergBServer
             networkManager = new NetworkManager({
                 scene: scene,
                 renderer: renderer,
@@ -223,7 +227,7 @@ function launchMultiplayer() {
 
             gameStarted = true;
         } catch (err) {
-            console.error("Multiplayer connection error:", err);
+            console.error("Multiplayer launch error:", err);
         }
     }
 
@@ -234,8 +238,8 @@ function launchMultiplayer() {
 bindClick('#btn-play-world', launchSingleplayer);
 bindClick('#btn-connect-server', launchMultiplayer);
 
+// --- 7. CONTROLS & POINTER LOCK ---
 document.addEventListener('pointerlockchange', () => {
-    // Keep pointer unlocked if typing in chat box
     const chatInput = document.getElementById('chat-input');
     if (document.activeElement === chatInput) return;
 
@@ -256,7 +260,7 @@ renderer.domElement.addEventListener('click', () => {
     }
 });
 
-// --- 7. CONTROLS (BLOCK BREAK / PLACE WITH NETWORK SYNC) ---
+// Block Place / Break with Network Broadcasting
 window.addEventListener('contextmenu', (e) => e.preventDefault());
 
 window.addEventListener('mousedown', (e) => {
@@ -272,12 +276,11 @@ window.addEventListener('mousedown', (e) => {
 
         mapGenerator.removeBlock(bx, by, bz);
 
-        // Sync to server if in multiplayer
         if (networkManager && networkManager.socket) {
             networkManager.socket.emit('blockBreak', { x: bx, y: by, z: bz });
         }
 
-    } else if (e.button === 2) { // Right Click -> Place Active Block
+    } else if (e.button === 2) { // Right Click -> Place
         const activeKey = blockInventory[selectedSlotIndex].key;
         const selectedMaterial = mapGenerator.materials[activeKey] || mapGenerator.materials.grass;
 
@@ -287,7 +290,6 @@ window.addEventListener('mousedown', (e) => {
 
         mapGenerator.addBlock(px, py, pz, selectedMaterial);
 
-        // Sync to server if in multiplayer
         if (networkManager && networkManager.socket) {
             networkManager.socket.emit('blockPlace', {
                 x: px,
@@ -299,14 +301,14 @@ window.addEventListener('mousedown', (e) => {
     }
 });
 
-// Resize window handler
+// Window Resize
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// --- 8. RENDER LOOP ---
+// --- 8. GAME ANIMATION & RENDER LOOP ---
 const clock = new THREE.Clock();
 
 function animate() {
@@ -316,12 +318,12 @@ function animate() {
     if (gameStarted && player) {
         player.update(delta);
 
-        // Update remote player transforms in multiplayer
+        // Update remote player transforms from multiplayer socket
         if (networkManager) {
             networkManager.update();
         }
     } else {
-        // Idle menu orbit camera
+        // Camera orbit for main menu backdrop
         const time = clock.getElapsedTime() * 0.15;
         camera.position.set(Math.sin(time) * 25, 18, Math.cos(time) * 25);
         camera.lookAt(0, 2, 0);
