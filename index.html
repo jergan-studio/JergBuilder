@@ -51,7 +51,7 @@
             border: 3px solid #555;
             padding: 28px;
             border-radius: 8px;
-            min-width: 300px;
+            min-width: 320px;
             align-items: center;
             color: #fff;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
@@ -68,6 +68,23 @@
             display: none !important;
         }
 
+        /* INPUT FIELD STYLES */
+        .menu-input {
+            width: 100%;
+            padding: 10px 14px;
+            background: #222;
+            color: #fff;
+            border: 2px solid #555;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 14px;
+            outline: none;
+        }
+
+        .menu-input:focus {
+            border-color: #00ffcc;
+        }
+
         /* BUTTON STYLES */
         .menu-btn {
             width: 100%;
@@ -79,7 +96,7 @@
             font-family: inherit;
             font-size: 16px;
             font-weight: bold;
-            transition: background 0.15s ease;
+            transition: background 0.15s ease, border-color 0.15s ease;
         }
 
         .menu-btn:hover {
@@ -157,6 +174,40 @@
             font-size: 10px;
             text-shadow: 1px 1px 1px #000;
         }
+
+        /* CHAT SYSTEM OVERLAY */
+        #chat-container {
+            position: absolute;
+            bottom: 80px;
+            left: 20px;
+            width: 320px;
+            z-index: 100;
+            pointer-events: none;
+        }
+
+        #chat-messages {
+            max-height: 160px;
+            overflow-y: auto;
+            margin-bottom: 6px;
+            text-shadow: 1px 1px 3px #000;
+            color: #fff;
+            font-size: 13px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        #chat-input {
+            width: 100%;
+            padding: 8px 10px;
+            background: rgba(0, 0, 0, 0.75);
+            border: 2px solid #fff;
+            color: #fff;
+            pointer-events: auto;
+            border-radius: 4px;
+            font-family: inherit;
+            outline: none;
+        }
     </style>
 
     <script type="importmap">
@@ -167,6 +218,8 @@
         }
       }
     </script>
+
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 </head>
 <body>
 
@@ -174,10 +227,17 @@
 
     <div id="hotbar"></div>
 
+    <div id="chat-container">
+        <div id="chat-messages"></div>
+        <input type="text" id="chat-input" class="hidden" placeholder="Press Enter to talk..." maxlength="100">
+    </div>
+
     <div id="ui-overlay">
+
         <div id="menu-title" class="menu-panel">
             <h2>JergBuilder</h2>
-            <button id="btn-worlds" class="menu-btn">Worlds</button>
+            <button id="btn-worlds" class="menu-btn">Singleplayer</button>
+            <button id="btn-multiplayer" class="menu-btn">Multiplayer</button>
             <button id="btn-mods" class="menu-btn">Mods</button>
             <button id="btn-skin" class="menu-btn">Select Skin</button>
             <button id="btn-settings" class="menu-btn">Settings</button>
@@ -186,6 +246,14 @@
         <div id="menu-worlds" class="menu-panel hidden">
             <h2>Select World</h2>
             <button id="btn-play-world" class="menu-btn">Play World</button>
+            <button class="menu-btn btn-back">Back</button>
+        </div>
+
+        <div id="menu-multiplayer" class="menu-panel hidden">
+            <h2>Multiplayer</h2>
+            <input type="text" id="player-username" class="menu-input" placeholder="Username" maxlength="16">
+            <input type="text" id="server-url" class="menu-input" value="https://jergbserver.onrender.com" placeholder="Server URL">
+            <button id="btn-connect-server" class="menu-btn">Join Server</button>
             <button class="menu-btn btn-back">Back</button>
         </div>
 
@@ -214,6 +282,7 @@
             <p style="font-size: 13px; color: #aaa;">FOV: 75 | Sensitivity: 1.0</p>
             <button class="menu-btn btn-back">Back</button>
         </div>
+
     </div>
 
     <script type="module" src="Js/main.js"></script>
