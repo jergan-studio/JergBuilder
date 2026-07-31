@@ -34,12 +34,14 @@ function bindClick(selector, callback) {
     }
 }
 
+// Bind main menu panel transitions
 bindClick('#btn-worlds', () => showScreen('worlds'));
 bindClick('#btn-multiplayer', () => showScreen('multiplayer'));
 bindClick('#btn-mods', () => showScreen('mods'));
 bindClick('#btn-skin', () => showScreen('skin'));
 bindClick('#btn-settings', () => showScreen('settings'));
 
+// Bind back buttons
 document.querySelectorAll('.btn-back').forEach(btn => {
     btn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -175,7 +177,7 @@ dirLight.castShadow = true;
 scene.add(dirLight);
 scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 
-// Render hotbar on initial boot
+// Render hotbar on initial launch
 createHotbarUI();
 
 // --- 6. GAME LAUNCH & POINTER LOCK ---
