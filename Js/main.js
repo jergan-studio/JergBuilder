@@ -34,14 +34,12 @@ function bindClick(selector, callback) {
     }
 }
 
-// Bind Menu Buttons
 bindClick('#btn-worlds', () => showScreen('worlds'));
 bindClick('#btn-multiplayer', () => showScreen('multiplayer'));
 bindClick('#btn-mods', () => showScreen('mods'));
 bindClick('#btn-skin', () => showScreen('skin'));
 bindClick('#btn-settings', () => showScreen('settings'));
 
-// Back Buttons
 document.querySelectorAll('.btn-back').forEach(btn => {
     btn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -177,13 +175,13 @@ dirLight.castShadow = true;
 scene.add(dirLight);
 scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 
+// Render hotbar on initial boot
 createHotbarUI();
 
-// --- 6. GAME LAUNCHERS ---
-
-// Singleplayer Launcher
+// --- 6. GAME LAUNCH & POINTER LOCK ---
 function launchSingleplayer() {
     playMusic();
+    createHotbarUI();
 
     if (!gameStarted) {
         try {
@@ -202,29 +200,28 @@ function launchSingleplayer() {
     renderer.domElement.requestPointerLock();
 }
 
-// Multiplayer Server Launcher
 function launchMultiplayer() {
     playMusic();
+    createHotbarUI();
 
     const serverUrl = document.getElementById('server-url')?.value || 'https://jergbserver.onrender.com';
     const username = document.getElementById('player-username')?.value || `Player_${Math.floor(Math.random() * 1000)}`;
 
     if (!gameStarted) {
         try {
-            // Local Map & Player setup
             mapGenerator = new MapGenerator(scene, 'JergBuilder_Default');
             mapGenerator.generate();
 
             player = new Player(scene, camera, mapGenerator);
 
-            // Connect to JergBServer
-            networkManager = new NetworkManager({
+            const gameObject = {
                 scene: scene,
                 renderer: renderer,
                 player: player,
                 mapGenerator: mapGenerator
-            }, serverUrl, username);
+            };
 
+            networkManager = new NetworkManager(gameObject, serverUrl, username);
             gameStarted = true;
         } catch (err) {
             console.error("Multiplayer launch error:", err);
@@ -238,7 +235,6 @@ function launchMultiplayer() {
 bindClick('#btn-play-world', launchSingleplayer);
 bindClick('#btn-connect-server', launchMultiplayer);
 
-// --- 7. CONTROLS & POINTER LOCK ---
 document.addEventListener('pointerlockchange', () => {
     const chatInput = document.getElementById('chat-input');
     if (document.activeElement === chatInput) return;
@@ -260,7 +256,7 @@ renderer.domElement.addEventListener('click', () => {
     }
 });
 
-// Block Place / Break with Network Broadcasting
+// --- 7. CONTROLS (BLOCK BREAK / PLACE) ---
 window.addEventListener('contextmenu', (e) => e.preventDefault());
 
 window.addEventListener('mousedown', (e) => {
@@ -280,7 +276,7 @@ window.addEventListener('mousedown', (e) => {
             networkManager.socket.emit('blockBreak', { x: bx, y: by, z: bz });
         }
 
-    } else if (e.button === 2) { // Right Click -> Place
+    } else if (e.button === 2) { // Right Click -> Place Active Block
         const activeKey = blockInventory[selectedSlotIndex].key;
         const selectedMaterial = mapGenerator.materials[activeKey] || mapGenerator.materials.grass;
 
@@ -301,14 +297,14 @@ window.addEventListener('mousedown', (e) => {
     }
 });
 
-// Window Resize
+// Resize window handler
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// --- 8. GAME ANIMATION & RENDER LOOP ---
+// Render Loop
 const clock = new THREE.Clock();
 
 function animate() {
@@ -318,12 +314,10 @@ function animate() {
     if (gameStarted && player) {
         player.update(delta);
 
-        // Update remote player transforms from multiplayer socket
         if (networkManager) {
             networkManager.update();
         }
     } else {
-        // Camera orbit for main menu backdrop
         const time = clock.getElapsedTime() * 0.15;
         camera.position.set(Math.sin(time) * 25, 18, Math.cos(time) * 25);
         camera.lookAt(0, 2, 0);
