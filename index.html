@@ -18,10 +18,10 @@
             height: 100%;
             overflow: hidden;
             font-family: 'Courier New', Courier, monospace;
-            background-color: #87ceeb; /* Sky blue background fallback */
+            background-color: #87ceeb;
         }
 
-        /* THREE.JS CANVAS */
+        /* CANVAS */
         canvas {
             position: absolute;
             top: 0;
@@ -43,25 +43,25 @@
             align-items: center;
             justify-content: center;
             z-index: 9999;
-            pointer-events: none; /* Allows canvas clicks through transparent areas */
-            background: transparent;
+            pointer-events: none;
+            background: rgba(0, 0, 0, 0.25);
         }
 
         /* MENU PANELS */
         .menu-panel {
-            pointer-events: auto; /* Re-enables clicks for inner buttons */
+            pointer-events: auto;
             display: flex;
             flex-direction: column;
             gap: 14px;
-            background: rgba(20, 20, 20, 0.85);
+            background: rgba(20, 20, 20, 0.9);
             border: 2px solid #555;
             padding: 28px;
             border-radius: 8px;
             min-width: 320px;
             align-items: center;
             color: #fff;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-            backdrop-filter: blur(4px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(6px);
         }
 
         .menu-panel h2 {
@@ -69,27 +69,11 @@
             text-transform: uppercase;
             letter-spacing: 2px;
             color: #fff;
+            margin-bottom: 4px;
         }
 
         .hidden {
             display: none !important;
-        }
-
-        /* INPUT FIELDS */
-        .menu-input {
-            width: 100%;
-            padding: 10px 14px;
-            background: #222;
-            color: #fff;
-            border: 2px solid #555;
-            border-radius: 4px;
-            font-family: inherit;
-            font-size: 14px;
-            outline: none;
-        }
-
-        .menu-input:focus {
-            border-color: #00ffcc;
         }
 
         /* BUTTON STYLES */
@@ -101,17 +85,64 @@
             border: 2px solid #666;
             cursor: pointer;
             font-family: inherit;
-            font-size: 16px;
+            font-size: 15px;
             font-weight: bold;
-            transition: background 0.15s ease, border-color 0.15s ease;
+            border-radius: 4px;
+            transition: all 0.15s ease;
         }
 
         .menu-btn:hover {
             background: #555;
-            border-color: #fff;
+            border-color: #00ffcc;
+            color: #00ffcc;
         }
 
-        /* CROSSHAIR HUD */
+        /* SKIN SELECTION GRID */
+        .skin-options {
+            display: flex;
+            gap: 10px;
+            margin: 10px 0;
+        }
+
+        .skin-card {
+            width: 60px;
+            height: 60px;
+            border: 2px solid #555;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: bold;
+            background: #222;
+            transition: transform 0.15s ease;
+        }
+
+        .skin-card:hover {
+            transform: scale(1.05);
+        }
+
+        .skin-card.selected {
+            border-color: #00ffcc;
+            box-shadow: 0 0 8px #00ffcc;
+        }
+
+        /* SETTINGS CONTROLS */
+        .setting-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            font-size: 14px;
+            gap: 10px;
+        }
+
+        .setting-row input[type="range"] {
+            cursor: pointer;
+        }
+
+        /* HUD CROSSHAIR */
         #crosshair {
             position: absolute;
             top: 50%;
@@ -126,7 +157,7 @@
         #crosshair::before, #crosshair::after {
             content: '';
             position: absolute;
-            background: rgba(255, 255, 255, 0.8);
+            background: rgba(255, 255, 255, 0.9);
         }
 
         #crosshair::before { top: 4px; left: 0; width: 10px; height: 2px; }
@@ -182,40 +213,6 @@
             font-size: 10px;
             text-shadow: 1px 1px 1px #000;
         }
-
-        /* CHAT SYSTEM OVERLAY */
-        #chat-container {
-            position: absolute;
-            bottom: 80px;
-            left: 20px;
-            width: 320px;
-            z-index: 100;
-            pointer-events: none;
-        }
-
-        #chat-messages {
-            max-height: 160px;
-            overflow-y: auto;
-            margin-bottom: 6px;
-            text-shadow: 1px 1px 3px #000;
-            color: #fff;
-            font-size: 13px;
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-
-        #chat-input {
-            width: 100%;
-            padding: 8px 10px;
-            background: rgba(0, 0, 0, 0.75);
-            border: 2px solid #fff;
-            color: #fff;
-            pointer-events: auto;
-            border-radius: 4px;
-            font-family: inherit;
-            outline: none;
-        }
     </style>
 
     <script type="importmap">
@@ -226,26 +223,17 @@
         }
       }
     </script>
-
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 </head>
 <body>
 
     <div id="crosshair"></div>
-
     <div id="hotbar"></div>
-
-    <div id="chat-container">
-        <div id="chat-messages"></div>
-        <input type="text" id="chat-input" class="hidden" placeholder="Press Enter to talk..." maxlength="100">
-    </div>
 
     <div id="ui-overlay">
 
         <div id="menu-title" class="menu-panel">
             <h2>JergBuilder</h2>
             <button id="btn-worlds" class="menu-btn">Worlds</button>
-            <button id="btn-multiplayer" class="menu-btn">Multiplayer</button>
             <button id="btn-mods" class="menu-btn">Mods</button>
             <button id="btn-skin" class="menu-btn">Select Skin</button>
             <button id="btn-settings" class="menu-btn">Settings</button>
@@ -253,24 +241,16 @@
 
         <div id="menu-worlds" class="menu-panel hidden">
             <h2>Select World</h2>
-            <button id="btn-play-world" class="menu-btn">Play World</button>
-            <button class="menu-btn btn-back">Back</button>
-        </div>
-
-        <div id="menu-multiplayer" class="menu-panel hidden">
-            <h2>Multiplayer</h2>
-            <input type="text" id="player-username" class="menu-input" placeholder="Username" maxlength="16">
-            <input type="text" id="server-url" class="menu-input" value="https://jergbserver.onrender.com" placeholder="Server URL">
-            <button id="btn-connect-server" class="menu-btn">Join Server</button>
+            <button id="btn-play-world" class="menu-btn">▶ Play Singleplayer</button>
             <button class="menu-btn btn-back">Back</button>
         </div>
 
         <div id="menu-mods" class="menu-panel hidden">
             <h2>Mod Manager</h2>
-            <p style="font-size: 12px; color: #aaa; text-align: center;">Upload a .js mod file to insert dynamic code.</p>
+            <p style="font-size: 12px; color: #aaa; text-align: center;">Upload a .js file to run custom code.</p>
             
-            <label for="mod-file-input" class="menu-btn" style="text-align: center; display: block; line-height: 24px;">
-                📁 Load JS Mod File
+            <label for="mod-file-input" class="menu-btn" style="text-align: center; display: block; line-height: 20px;">
+                📁 Load Mod Script
             </label>
             <input type="file" id="mod-file-input" accept=".js" style="display: none;">
 
@@ -281,13 +261,21 @@
 
         <div id="menu-skin" class="menu-panel hidden">
             <h2>Select Skin</h2>
-            <p style="font-size: 13px; color: #aaa;">Default Skin Active</p>
+            <div class="skin-options">
+                <div class="skin-card selected" data-skin="default" style="color: #00ffcc;">Default</div>
+                <div class="skin-card" data-skin="blue" style="color: #1e90ff;">Blue</div>
+                <div class="skin-card" data-skin="red" style="color: #ff3333;">Red</div>
+            </div>
+            <p id="skin-status" style="font-size: 13px; color: #aaa;">Active Skin: Default</p>
             <button class="menu-btn btn-back">Back</button>
         </div>
 
         <div id="menu-settings" class="menu-panel hidden">
             <h2>Settings</h2>
-            <p style="font-size: 13px; color: #aaa;">FOV: 75 | Sensitivity: 1.0</p>
+            <div class="setting-row">
+                <span>FOV: <span id="fov-value">75</span></span>
+                <input type="range" id="fov-slider" min="60" max="110" value="75">
+            </div>
             <button class="menu-btn btn-back">Back</button>
         </div>
 
