@@ -13,18 +13,23 @@
             user-select: none;
         }
 
-        body, html {
-            width: 100vw;
-            height: 100vh;
+        html, body {
+            width: 100%;
+            height: 100%;
             overflow: hidden;
             font-family: 'Courier New', Courier, monospace;
-            background-color: #000;
+            background-color: #87ceeb; /* Matches sky background */
         }
 
+        /* THREE.JS CANVAS FIX */
         canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw !important;
+            height: 100vh !important;
+            z-index: 1;
             display: block;
-            width: 100vw;
-            height: 100vh;
         }
 
         /* OVERLAY CONTAINER */
@@ -39,6 +44,7 @@
             justify-content: center;
             z-index: 9999;
             pointer-events: none;
+            background: transparent;
         }
 
         /* MENU PANELS */
@@ -47,14 +53,15 @@
             display: flex;
             flex-direction: column;
             gap: 14px;
-            background: rgba(20, 20, 20, 0.95);
-            border: 3px solid #555;
+            background: rgba(20, 20, 20, 0.85);
+            border: 2px solid #555;
             padding: 28px;
             border-radius: 8px;
             min-width: 320px;
             align-items: center;
             color: #fff;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
         }
 
         .menu-panel h2 {
@@ -113,7 +120,7 @@
             height: 10px;
             transform: translate(-50%, -50%);
             pointer-events: none;
-            z-index: 10;
+            z-index: 100;
         }
 
         #crosshair::before, #crosshair::after {
@@ -138,6 +145,7 @@
             border-radius: 6px;
             border: 2px solid #444;
             z-index: 100;
+            pointer-events: auto;
         }
 
         .hotbar-slot {
@@ -236,7 +244,7 @@
 
         <div id="menu-title" class="menu-panel">
             <h2>JergBuilder</h2>
-            <button id="btn-worlds" class="menu-btn">Singleplayer</button>
+            <button id="btn-worlds" class="menu-btn">Worlds</button>
             <button id="btn-multiplayer" class="menu-btn">Multiplayer</button>
             <button id="btn-mods" class="menu-btn">Mods</button>
             <button id="btn-skin" class="menu-btn">Select Skin</button>
